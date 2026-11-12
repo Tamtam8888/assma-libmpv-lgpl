@@ -101,8 +101,10 @@ jobs:
             echo "the ci/build-mingw64-full.sh script (LuaJIT, libsixel, libarchive, uchardet, subrandr, cppwinrt, mujs)."
             echo "The source archive mpv-and-ffmpeg-sources.tar.xz is attached to the same release."
           } > artifact-libmpv/SOURCES.txt
-          tar -cJf mpv-and-ffmpeg-sources.tar.xz --exclude=./build --exclude=./artifact --exclude=./artifact-libmpv \
-              --exclude=.git --exclude=./ffmpeg/.git .
+          # written outside the folder it packs (tar refuses a file that changes while it reads it)
+          tar -cJf /tmp/mpv-and-ffmpeg-sources.tar.xz --exclude=./build --exclude=./artifact \
+              --exclude=./artifact-libmpv --exclude=.git --exclude='./*/.git' .
+          mv /tmp/mpv-and-ffmpeg-sources.tar.xz .
           cat artifact-libmpv/BUILDINFO.txt
 
       - uses: actions/upload-artifact@v4
