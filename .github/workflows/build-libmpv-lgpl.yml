@@ -30,6 +30,9 @@ jobs:
         WINEPREFIX: /tmp/wine
     outputs:
       name: ${{ steps.info.outputs.name }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Get mpv (official source)
         uses: actions/checkout@v4
@@ -72,6 +75,7 @@ jobs:
         id: info
         run: |
           set -eu
+          git config --global --add safe.directory '*'      # the container user is not the checkout's owner
           MPV_COMMIT=$(git rev-parse HEAD)
           FFMPEG_COMMIT=$(git -C ffmpeg rev-parse HEAD)
           VERSION=$(grep VERSION $(find . -path "*/common/version.h" -type f | head -n 1) | cut -d'"' -f2)
