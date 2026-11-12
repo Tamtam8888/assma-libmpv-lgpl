@@ -1,0 +1,127 @@
+# LGPL libmpv for ASSMA (Windows x64).
+#
+# What this does, in one sentence: it runs mpv's OWN official CI job for an LGPL libmpv
+# ("mingw64-full", variant "lgpl", in mpv-player/mpv .github/workflows/build.yml) unchanged,
+# then checks the result is LGPL and publishes it with its licence and a source list.
+#
+# - Recipe:    ci/build-mingw64-full.sh from mpv-player/mpv at the commit given below (not edited).
+# - Toolchain: the FFmpeg-Builds container image win64-lgpl (the same project ASSMA's FFmpeg comes from).
+# - Result:    libmpv-2.dll (+ import library, headers), LICENSE.LGPL, BUILDINFO.txt, SOURCES.txt.
+# Nothing from ASSMA is in this repository.
+name: Build LGPL libmpv
+
+on:
+  workflow_dispatch:
+    inputs:
+      mpv_ref:
+        description: "mpv commit / tag to build (mpv-player/mpv)"
+        required: true
+        default: "fe753a78246151a2489b472dabcb04f2edd61d50"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ffmpeg-builds/ffmpeg-builds/win64-lgpl:latest
+      env:
+        WINEPREFIX: /tmp/wine
+    outputs:
+      name: ${{ steps.info.outputs.name }}
+    steps:
+      - name: Get mpv (official source)
+        uses: actions/checkout@v4
+        with:
+          repository: mpv-player/mpv
+          ref: ${{ inputs.mpv_ref }}
+
+      - name: Build (mpv's own script, unchanged)
+        run: ./ci/build-mingw64-full.sh
+
+      - name: Print meson log on failure
+        if: failure()
+        run: cat ./build/meson-logs/meson-log.txt || true
+
+      - name: Check the licence (must be LGPL)
+        run: |
+          set -eu
+          echo "VARIANT=$VARIANT"
+          [ "$VARIANT" = "lgpl" ] || { echo "not an LGPL toolchain image"; exit 1; }
+          # mpv: the gpl build option must be false
+          grep -o '"name": "gpl"[^}]*' build/meson-info/intro-buildoptions.json | tee /tmp/gpl.txt
+          grep -q '"value": false' /tmp/gpl.txt || { echo "mpv was built with gpl=true"; exit 1; }
+          # FFmpeg: neither GPL nor nonfree
+          grep -E '^#define CONFIG_(GPL|NONFREE|VERSION3) ' ffmpeg/config.h | tee /tmp/ffmpeg-licence.txt
+          grep -q '^#define CONFIG_GPL 0' ffmpeg/config.h || { echo "FFmpeg is GPL"; exit 1; }
+          grep -q '^#define CONFIG_NONFREE 0' ffmpeg/config.h || { echo "FFmpeg is nonfree"; exit 1; }
+          ls -l artifact-libmpv
+
+      - name: Functional test (mpv's own check, under Wine)
+        run: cd artifact && wine ./mpv.com -v --no-config
+
+      - name: Build information and sources
+        id: info
+        run: |
+          set -eu
+          MPV_COMMIT=$(git rev-parse HEAD)
+          FFMPEG_COMMIT=$(git -C ffmpeg rev-parse HEAD)
+          VERSION=$(grep VERSION $(find . -path "*/common/version.h" -type f | head -n 1) | cut -d'"' -f2)
+          NAME="libmpv-lgpl-${VERSION}-${MPV_COMMIT:0:9}-x64"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          {
+            echo "LGPL libmpv for ASSMA - build information"
+            echo "mpv version      : $VERSION"
+            echo "mpv source       : https://github.com/mpv-player/mpv/tree/$MPV_COMMIT"
+            echo "FFmpeg source    : https://github.com/FFmpeg/FFmpeg/tree/$FFMPEG_COMMIT"
+            echo "Recipe           : ci/build-mingw64-full.sh of that mpv commit, unchanged"
+            echo "Toolchain image  : ghcr.io/ffmpeg-builds/ffmpeg-builds/win64-lgpl:latest (variant $VARIANT)"
+            echo "Built by         : GitHub Actions run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "Built on         : $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo "mpv gpl option   : $(cat /tmp/gpl.txt)"
+            echo "FFmpeg licence   :"; sed 's/^/  /' /tmp/ffmpeg-licence.txt
+          } > artifact-libmpv/BUILDINFO.txt
+          {
+            echo "Corresponding source (LGPL): the exact sources used for this build."
+            echo "mpv:    https://github.com/mpv-player/mpv  commit $MPV_COMMIT"
+            echo "FFmpeg: https://github.com/FFmpeg/FFmpeg  commit $FFMPEG_COMMIT"
+            echo "Other libraries: the FFmpeg-Builds image above (https://github.com/FFmpeg-Builds/FFmpeg-Builds) and"
+            echo "the ci/build-mingw64-full.sh script (LuaJIT, libsixel, libarchive, uchardet, subrandr, cppwinrt, mujs)."
+            echo "The source archive mpv-and-ffmpeg-sources.tar.xz is attached to the same release."
+          } > artifact-libmpv/SOURCES.txt
+          tar -cJf mpv-and-ffmpeg-sources.tar.xz --exclude=./build --exclude=./artifact --exclude=./artifact-libmpv \
+              --exclude=.git --exclude=./ffmpeg/.git .
+          cat artifact-libmpv/BUILDINFO.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.info.outputs.name }}
+          path: artifact-libmpv/*
+          retention-days: 90
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sources
+          path: mpv-and-ffmpeg-sources.tar.xz
+          retention-days: 90
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dl
+      - name: Publish as a release (permanent download)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NAME: ${{ needs.build.outputs.name }}
+        run: |
+          set -eu
+          cd dl
+          (cd "$NAME" && zip -r "../$NAME.zip" .)
+          sha256sum "$NAME.zip" sources/mpv-and-ffmpeg-sources.tar.xz > SHA256SUMS.txt
+          gh release create "$NAME" "$NAME.zip" sources/mpv-and-ffmpeg-sources.tar.xz SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --title "$NAME" \
+            --notes "LGPL libmpv for ASSMA, built from mpv's official ci/build-mingw64-full.sh (variant lgpl). See BUILDINFO.txt and SOURCES.txt inside the zip."
