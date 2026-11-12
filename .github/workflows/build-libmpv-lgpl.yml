@@ -50,15 +50,17 @@ jobs:
           echo "VARIANT=$VARIANT"
           [ "$VARIANT" = "lgpl" ] || { echo "not an LGPL toolchain image"; exit 1; }
           # mpv: the gpl build option must be false
-          python3 - <<'PY' | tee /tmp/gpl.txt
+          python3 - > /tmp/gpl.txt <<'PY'
           import json
           options = json.load(open("build/meson-info/intro-buildoptions.json"))
           values = [o["value"] for o in options if o["name"] == "gpl"]
           print("gpl =", values)
           raise SystemExit(0 if values == [False] else "mpv was not built with gpl=false")
           PY
+          cat /tmp/gpl.txt
           # FFmpeg: neither GPL nor nonfree
-          grep -E '^#define CONFIG_(GPL|NONFREE|VERSION3) ' ffmpeg/config.h | tee /tmp/ffmpeg-licence.txt
+          grep -E '^#define CONFIG_(GPL|NONFREE|VERSION3) ' ffmpeg/config.h > /tmp/ffmpeg-licence.txt
+          cat /tmp/ffmpeg-licence.txt
           grep -q '^#define CONFIG_GPL 0' ffmpeg/config.h || { echo "FFmpeg is GPL"; exit 1; }
           grep -q '^#define CONFIG_NONFREE 0' ffmpeg/config.h || { echo "FFmpeg is nonfree"; exit 1; }
           ls -l artifact-libmpv
