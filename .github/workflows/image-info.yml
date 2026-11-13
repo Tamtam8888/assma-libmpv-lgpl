@@ -29,8 +29,11 @@ jobs:
           docker pull -q "$IMAGE"
           docker inspect "$IMAGE" > out/inspect.json
           docker history --no-trunc --format '{{.CreatedBy}}' "$IMAGE" > out/history.txt
-          ls -l out; head -c 3000 out/provenance.json; echo; grep -o '"Labels":{[^}]*}' out/inspect.json || true
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+          ls -l out
+          echo "== env"; docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$IMAGE"
+          echo "== labels"; docker inspect --format '{{json .Config.Labels}}' "$IMAGE"
+          echo "== history"; cat out/history.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: image-info
           path: out/*
