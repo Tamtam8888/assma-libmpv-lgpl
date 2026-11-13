@@ -1,0 +1,63 @@
+# Read-only: downloads the third-party packages the ASSMA field package carries (same sources and versions as
+# tools/field_package/field_versions.json + requirements.txt of ASSMA Fix200.28) and prints what is really inside:
+# DLLs, FFmpeg DLLs with their configuration / licence strings, Qt multimedia plugins and their imports, licence
+# files, and the external FFmpeg's capabilities. Changes nothing, builds nothing, publishes nothing.
+name: Inspect field package dependencies
+
+on:
+  workflow_dispatch:
+    inputs:
+      pyside6:
+        description: "PySide6 version spec"
+        default: "==6.12.*"
+      python:
+        description: "Python version of the embeddable runtime"
+        default: "3.12"
+      ffmpeg_url:
+        description: "external FFmpeg used by the field package"
+        default: "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-win64-lgpl-9.0.zip"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+      - name: Download wheels and archives
+        run: |
+          set -eu
+          py -${{ inputs.python }} -m pip install --quiet pefile
+          mkdir pkgs
+          py -${{ inputs.python }} -m pip download --quiet --dest pkgs --only-binary=:all: \
+            "PySide6${{ inputs.pyside6 }}" "numpy>=1.24" "sounddevice>=0.4.6"
+          ver=$(py -${{ inputs.python }} -c "import sys; print('.'.join(map(str, sys.version_info[:3])))")
+          curl -fsSL -o "pkgs/python-$ver-embed-amd64.zip" "https://www.python.org/ftp/python/$ver/python-$ver-embed-amd64.zip"
+          curl -fsSL -o pkgs/ffmpeg-external.zip "${{ inputs.ffmpeg_url }}"
+          ls -l pkgs
+      - name: Inspect packages
+        run: py -${{ inputs.python }} tools/inspect_field_deps.py pkgs
+      - name: External FFmpeg capabilities
+        run: |
+          set -u
+          bin=$(dirname "$(find pkgs/x/ffmpeg-external.zip -name ffmpeg.exe | head -1)")
+          "$bin/ffmpeg.exe" -hide_banner -version
+          echo "== encoders: $("$bin/ffmpeg.exe" -hide_banner -encoders | grep -c '^ [VAS]')"
+          echo "== decoders: $("$bin/ffmpeg.exe" -hide_banner -decoders | grep -c '^ [VAS]')"
+          echo "== filters:  $("$bin/ffmpeg.exe" -hide_banner -filters | grep -c '^ [.TSC]')"
+          for f in yadif bwdif w3fdif estdif nnedi fieldmatch pullup decimate kerndeint mcdeint atempo asetrate aresample \
+                   rubberband loudnorm ebur128 silencedetect afftdn arnndn whisper amerge pan join volume alimiter amix \
+                   adelay aformat setpts asetpts fps framerate minterpolate scale zscale tinterlace interlace telecine \
+                   colorspace showwavespic astats; do
+            if "$bin/ffmpeg.exe" -hide_banner -filters 2>/dev/null | awk '{print $2}' | grep -qx "$f"; then echo "FILTER yes $f"; else echo "FILTER no  $f"; fi
+          done
+          for e in libx264 libx265 libopenh264 libkvazaar libsvtav1 libaom-av1 libvvenc h264_nvenc hevc_nvenc h264_amf hevc_amf \
+                   h264_qsv hevc_qsv h264_mf hevc_mf prores prores_ks prores_aw dnxhd mpeg2video mpeg4 ffv1 aac libfdk_aac \
+                   ac3 eac3 mp2 libtwolame libmp3lame flac alac pcm_s16le pcm_s24le pcm_s24be libopus libvorbis v210 rawvideo; do
+            if "$bin/ffmpeg.exe" -hide_banner -encoders 2>/dev/null | awk '{print $2}' | grep -qx "$e"; then echo "ENCODER yes $e"; else echo "ENCODER no  $e"; fi
+          done
+          ls -l "$bin"; ls "$(dirname "$bin")"
