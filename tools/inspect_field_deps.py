@@ -41,6 +41,17 @@ for archive in sorted(glob.glob(os.path.join(root, '*.whl')) + glob.glob(os.path
                 print(f'    IMPORTS ? {e}')
     lic = [os.path.relpath(p, dest) for p in glob.glob(dest + '/**/*', recursive=True)
            if re.search(r'(LICEN[CS]E|COPYING|NOTICE|THIRD|ThirdParty|licenses)', os.path.basename(p), re.I)]
+    for meta in glob.glob(dest + '/*.dist-info/METADATA'):
+        for line in open(meta, encoding='utf-8', errors='replace'):
+            if line.startswith(('License', 'Classifier: License')):
+                print(f'  META {line.strip()[:300]}')
+    for p in glob.glob(dest + '/**/*', recursive=True):
+        b = os.path.basename(p)
+        if os.path.isfile(p) and re.match(r'(LICEN[CS]E|COPYING)', b, re.I) and ('dist-info' in p or os.path.dirname(p).count(os.sep) <= dest.count(os.sep) + 1):
+            text = open(p, encoding='utf-8', errors='replace').read()
+            heads = [l.strip() for l in text.splitlines() if l.strip()][:3]
+            marks = [k for k in ('OpenSSL', 'libffi', 'SQLite', 'bzip2', 'xz', 'Expat', 'zlib', 'Tcl', 'mpdecimal', 'GNU LESSER', 'GNU GENERAL', 'Version 3', 'version 2.1') if k in text]
+            print(f'  LICHEAD {os.path.relpath(p, dest)} :: {" | ".join(heads)[:250]} :: mentions {marks}')
     print(f'licence files: {len(lic)}')
     for l in sorted(lic)[:80]:
         print(f'  LIC {l}')
