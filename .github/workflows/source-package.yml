@@ -1,0 +1,135 @@
+# Complete, verifiable source package for an EXISTING libmpv release (first use: b10).
+# The release itself is not changed: its MANIFEST.json is read, every source is fetched again at the recorded
+# commits, checked, and published as a separate release "<build>-sources".
+name: Source package for a build
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "release tag of the build"
+        required: true
+        default: "libmpv-lgpl-v0.42.0-dev-gfe753a782-fe753a782-x64-b10"
+      image:
+        description: "the build's toolchain image (must equal its MANIFEST)"
+        required: true
+        default: "ghcr.io/ffmpeg-builds/ffmpeg-builds/win64-lgpl@sha256:c89ee1e6f09006d25229c76a4b0b261c86a9e5d5dd986bcd646aa2d8b9521061"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ inputs.image }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          path: assma
+          fetch-depth: 0
+
+      - name: Read the build's manifest (release files are only read)
+        env:
+          BUILD: ${{ inputs.build }}
+          IMAGE: ${{ inputs.image }}
+        run: |
+          set -eu
+          git config --global --add safe.directory '*'
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$BUILD"
+          curl -fsSL -o build.zip "$base/$BUILD.zip"
+          curl -fsSL -o SHA256SUMS.build.txt "$base/SHA256SUMS.txt"
+          want=$(grep " $BUILD.zip\$" SHA256SUMS.build.txt | cut -d' ' -f1)
+          got=$(sha256sum build.zip | cut -d' ' -f1)
+          echo "zip sha256 $got (release SHA256SUMS: $want)"
+          [ "$got" = "$want" ]
+          python3 -c "import zipfile; zipfile.ZipFile('build.zip').extract('MANIFEST.json')"
+          python3 - <<'PY'
+          import json, os
+          m = json.load(open('MANIFEST.json'))
+          assert m['name'] == os.environ['BUILD'], m['name']
+          assert m['toolchain_image']['reference'] == os.environ['IMAGE'], 'image differs from the build'
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f"FFB_REV={m['toolchain_image']['ffmpeg_builds_revision']}\n")
+              env.write(f"BUILD_COMMIT={m['workflow']['commit']}\n")
+          print('build', m['name'], 'made by commit', m['workflow']['commit'])
+          PY
+
+      - name: Get FFmpeg-Builds at the image revision
+        run: |
+          set -eu
+          git -C assma worktree add -q "$GITHUB_WORKSPACE/assma-build" "$BUILD_COMMIT"
+          git init -q ffb && git -C ffb remote add origin https://github.com/FFmpeg-Builds/FFmpeg-Builds.git
+          git -C ffb fetch -q origin "$FFB_REV" && git -C ffb -c advice.detachedHead=false checkout -q FETCH_HEAD
+
+      - name: Make the source package
+        id: make
+        env:
+          IMAGE: ${{ inputs.image }}
+        run: |
+          set -u
+          python3 assma/tools/make_source_package.py --manifest MANIFEST.json --ffb ffb --repo "$GITHUB_WORKSPACE/assma-build" \
+            --out out --work /tmp/srcwork
+          echo "status=$?" >> "$GITHUB_OUTPUT"
+          python3 assma/tools/make_notice.py MANIFEST.json out/SOURCE-MANIFEST.json "${{ inputs.build }}-sources" \
+            > out/NOTICE.md
+          cp assma/tools/verify_sources.py out/
+          cat out/REPORT.md
+
+      - name: Verify the package as a recipient would (offline)
+        run: cd out && python3 verify_sources.py .
+
+      - name: Bundle
+        env:
+          BUILD: ${{ inputs.build }}
+        run: |
+          set -eu
+          cd out
+          {
+            echo "# Sources of $BUILD"
+            echo
+            echo "Download every file of this release into one folder and unpack the .tar files there:"
+            echo "    for f in *.tar; do tar -xf \$f; done"
+            echo "Then check:  python verify_sources.py .          (add --deep to compare with the public repositories)"
+            echo
+            echo "SOURCE-MANIFEST.json lists every part (repository, commit, SHA-256, files changed by a download"
+            echo "step). REPORT.md lists the automatic checks made when this package was built. NOTICE.md lists the"
+            echo "components inside libmpv-2.dll, each with its own licence."
+          } > README-SOURCES.md
+          mkdir ../assets
+          tar -cf ../assets/scripts.tar scripts
+          tar -cf ../assets/recipe-sources.tar recipe
+          tar -cf ../assets/image-library-sources-complete.tar image
+          tar -cf ../assets/rust-crates.tar rust 2>/dev/null || true
+          tar -cJf ../assets/licences-and-lists.tar.xz licences toolchain lists
+          cp SOURCE-MANIFEST.json REPORT.md NOTICE.md verify_sources.py README-SOURCES.md ../assets/
+          cd ../assets && sha256sum * > SHA256SUMS.txt && ls -l && cat SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: source-package
+          path: assets/
+          retention-days: 30
+
+      - name: Stop if a check failed (the package is not published then)
+        run: '[ "${{ steps.make.outputs.status }}" = 0 ]'
+
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: source-package
+          path: assets
+      - name: Publish as a separate release (the build's own release is not touched)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.build }}-sources
+        run: |
+          set -eu
+          gh release create "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --title "$TAG" \
+            --notes "Complete, verifiable sources of ${{ inputs.build }} (that release is unchanged). Start with README-SOURCES.md; NOTICE.md lists the components inside libmpv-2.dll with their licences."
