@@ -74,7 +74,10 @@ def pkgconfig_index(prefix: str) -> tuple[dict, list]:
         version = fields.get('Version', '')
         packages.append({'package': name, 'version': version, 'description': fields.get('Description', '')})
         for stem in re.findall(r'(?:^|\s)-l(\S+)', fields.get('Libs', '')):
-            by_stem.setdefault(stem, (name, version))
+            if name in (stem, 'lib' + stem):                # the package named after the library wins
+                by_stem[stem] = (name, version)
+            else:
+                by_stem.setdefault(stem, (name, version))
     return by_stem, packages
 
 
