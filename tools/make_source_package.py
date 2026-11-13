@@ -112,7 +112,10 @@ def recover_listing(remote: str, commit: str, folder: Path, base: Path, lists: P
     import tempfile
     with tempfile.TemporaryDirectory() as g:
         sh('git', '-C', g, 'init', '-q')
-        sh('git', '-C', g, 'fetch', '-q', '--depth=1', '--filter=blob:none', remote, commit)
+        r = subprocess.run(['git', '-C', g, 'fetch', '-q', '--depth=1', '--filter=blob:none', remote, commit],
+                           capture_output=True, text=True)
+        if r.returncode:                     # some servers refuse partial clones: fetch the whole commit
+            sh('git', '-C', g, 'fetch', '-q', '--depth=1', remote, commit)
         tree = sh('git', '-C', g, 'ls-tree', '-r', '--full-tree', 'FETCH_HEAD')
     entries = []
     mismatches = 0
@@ -310,7 +313,19 @@ def image_sources(m: dict, ffb: Path, out: Path, work: Path) -> list:
                     if mdir and not (dest / mdir.group(1)).exists():
                         folder = next((p for p in dest.rglob(mdir.group(1).split('/')[-1]) if p.is_dir()), None)
                     if folder and folder.is_dir() and not (folder / '.git').exists():
-                        rec = recover_listing(remote, value, folder, dest, out / 'lists', f'image_{stage}')
+                        # the URL the download step really cloned from (may be a mirror of SCRIPT_REPOn)
+                        used = re.search(r"git clone[^'\n]*'([^']+)'\s+" + re.escape(folder.name) + r'\b', dl)
+                        urls = [u for u in ((used.group(1) if used else None), remote) if u]
+                        rec = None
+                        for u in urls:
+                            try:
+                                rec = recover_listing(u, value, folder, dest, out / 'lists', f'image_{stage}')
+                                break
+                            except RuntimeError as e:
+                                print(f'recover from {u} failed: {str(e)[-200:]}', flush=True)
+                        if rec is None:
+                            check(False, f'image {stage}: {key} {value[:16]}: listing could not be fetched')
+                            continue
                         repos.append(rec)
                         hit = rec['mismatches'] == 0
                         for rp in repos:
