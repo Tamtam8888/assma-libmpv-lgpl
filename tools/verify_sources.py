@@ -9,7 +9,8 @@
    has the SHA-256 written in the manifest.
 3. --deep: each list file equals `git ls-files -s` of that commit fetched again from its public repository, so the
    lists themselves are not taken on trust.
-Files that a download step added or changed (for example autoreconf output) are named in the manifest and are not
+Files that differ only by the CRLF line endings git writes on checkout (.gitattributes eol=crlf) are
+reported, not failed. Files that a download step added or changed (for example autoreconf output) are named in the manifest and are not
 part of the comparison."""
 from __future__ import annotations
 
@@ -37,6 +38,9 @@ def blob_id(path: Path) -> str:
     return hashlib.sha1(b'blob %d\0' % len(data) + data).hexdigest()
 
 
+eol_converted: list = []
+
+
 def check_tree(root: Path, listing: str, changed: set) -> list:
     problems = []
     for line in listing.splitlines():
@@ -48,7 +52,14 @@ def check_tree(root: Path, listing: str, changed: set) -> list:
         if not (p.exists() or p.is_symlink()):
             problems.append(f'missing {rel}')
         elif blob_id(p) != blob:
-            problems.append(f'differs {rel}')
+            # git converts line endings on checkout when .gitattributes asks for it (eol=crlf for .bat / .sln):
+            # the stored blob has LF. Same content, different line endings - counted separately, not a failure.
+            data = p.read_bytes() if not p.is_symlink() else b''
+            lf = data.replace(b'\r\n', b'\n')
+            if lf != data and hashlib.sha1(b'blob %d\0' % len(lf) + lf).hexdigest() == blob:
+                eol_converted.append(rel)
+            else:
+                problems.append(f'differs {rel}')
     return problems
 
 
@@ -99,6 +110,9 @@ def main() -> int:
                             print(('ok    ' if same else 'FAIL  ') +
                                   f"deep: {r['remote']} {r['commit'][:12]} lists the same files")
                             failures += not same
+    if eol_converted:
+        print(f'note  {len(eol_converted)} files differ only by CRLF line endings that git applies on checkout '
+              f'(.gitattributes), e.g. {eol_converted[:3]}')
     print(f'\n{failures} failure(s)')
     return 1 if failures else 0
 

@@ -125,8 +125,13 @@ def recover_listing(remote: str, commit: str, folder: Path, base: Path, lists: P
         entries.append(f'{mode} {blob} 0\t{rel}')
         if kind == 'blob':
             p = folder / rel
-            if not (p.exists() or p.is_symlink()) or blob_id(p) != blob:
+            if not (p.exists() or p.is_symlink()):
                 mismatches += 1
+            elif blob_id(p) != blob:
+                data = p.read_bytes()
+                lf = data.replace(b'\r\n', b'\n')
+                if hashlib.sha1(b'blob %d\0' % len(lf) + lf).hexdigest() != blob:
+                    mismatches += 1
     listing = '\n'.join(entries) + '\n'
     rel = folder.relative_to(base).as_posix()
     name = re.sub(r'[^A-Za-z0-9._-]+', '_', f'{label}__{rel}')
@@ -330,9 +335,12 @@ def image_sources(m: dict, ffb: Path, out: Path, work: Path) -> list:
                         hit = rec['mismatches'] == 0
                         for rp in repos:
                             if rp is not rec:
-                                pre = rec['path'] + '/'
-                                rp['added_by_download_step'] = [a for a in rp['added_by_download_step']
-                                                                if not (a + '/').startswith(pre)]
+                                inner = rec['path'] if rp['path'] == '.' else rec['path'][len(rp['path']) + 1:] \
+                                    if rec['path'].startswith(rp['path'] + '/') else None
+                                if inner:
+                                    rp['added_by_download_step'] = [a for a in rp['added_by_download_step']
+                                                                    if not (a + '/').startswith(inner + '/')
+                                                                    and a.rstrip('/') != inner]
                 check(hit, f'image {stage}: {key} {value[:16]} is the fetched commit'
                            + ('' if target == value else f' (tag -> {target[:12]})'))
             if key.startswith('SCRIPT_REV'):
