@@ -1,0 +1,36 @@
+# Reads what the FFmpeg-Builds toolchain image says about itself (provenance, labels, layer history),
+# so the image used for libmpv can be traced to the FFmpeg-Builds revision that made it.
+name: Image information
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "image, pinned by digest"
+        required: true
+        default: "ghcr.io/ffmpeg-builds/ffmpeg-builds/win64-lgpl@sha256:c89ee1e6f09006d25229c76a4b0b261c86a9e5d5dd986bcd646aa2d8b9521061"
+
+permissions:
+  contents: read
+
+jobs:
+  info:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect
+        env:
+          IMAGE: ${{ inputs.image }}
+        run: |
+          set -u
+          mkdir out
+          docker buildx imagetools inspect --raw "$IMAGE" > out/manifest.json || true
+          docker buildx imagetools inspect --format '{{json .Provenance}}' "$IMAGE" > out/provenance.json || true
+          docker buildx imagetools inspect --format '{{json .Image}}' "$IMAGE" > out/image.json || true
+          docker pull -q "$IMAGE"
+          docker inspect "$IMAGE" > out/inspect.json
+          docker history --no-trunc --format '{{.CreatedBy}}' "$IMAGE" > out/history.txt
+          ls -l out; head -c 3000 out/provenance.json; echo; grep -o '"Labels":{[^}]*}' out/inspect.json || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: image-info
+          path: out/*
