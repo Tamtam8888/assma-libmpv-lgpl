@@ -78,36 +78,53 @@ def pkgconfig_index(prefix: str) -> tuple[dict, list]:
     return by_stem, packages
 
 
-def link_line(build_dir: Path) -> list:
-    """Tokens of the command that linked libmpv-2.dll, exactly as ninja ran it (`ninja -t commands`).
-    If the command passes its arguments in a response file (@file.rsp), that file is read too."""
+def link_line(build_dir: Path) -> tuple[list, dict]:
+    """The link of libmpv-2.dll, exactly as ninja ran it, and what the linker really took from each archive.
+
+    Returns (tokens of the link command, {archive path: number of members included}).
+    How: the DLL is linked once more (only the link step; same objects and libraries) with ninja's -d keeprsp, so the
+    response file that holds the arguments stays, and then with -Wl,-Map, whose "Archive member included" section
+    names every object file the linker pulled out of a static library. A library that is on the link line but gives
+    no member is not inside the DLL. The original DLL is put back afterwards, byte for byte."""
     out = subprocess.run(['ninja', '-C', str(build_dir), '-t', 'commands', 'libmpv-2.dll'],
                          check=True, capture_output=True, text=True).stdout.strip().splitlines()
     if not out:
         raise SystemExit('inventory: ninja gave no command for libmpv-2.dll')
-    command = out[-1]
-    print('inventory: link command of libmpv-2.dll (first 600 characters):', command[:600])
+    command = shlex.split(out[-1])
+    print('inventory: link command of libmpv-2.dll:', ' '.join(command)[:400])
+    dll = build_dir / 'libmpv-2.dll'
+    backup = build_dir / 'libmpv-2.dll.inventory-backup'
+    map_file = build_dir / 'libmpv-2.inventory.map'
+    original = sha256(dll)
+    os.replace(dll, backup)
+    try:
+        subprocess.run(['ninja', '-C', str(build_dir), '-d', 'keeprsp', 'libmpv-2.dll'], check=True)
+        subprocess.run(command + [f'-Wl,-Map={map_file.name}'], cwd=build_dir, check=True)
+    finally:
+        if dll.exists():
+            dll.unlink()
+        os.replace(backup, dll)
+    assert sha256(dll) == original, 'libmpv-2.dll changed during the inventory'
     tokens = []
-    for tok in shlex.split(command):
-        if not tok.startswith('@'):
+    for tok in command:
+        if tok.startswith('@'):
+            rsp = build_dir / tok[1:]
+            print('inventory: reading', rsp)
+            tokens += shlex.split(rsp.read_text(errors='replace'))
+        else:
             tokens.append(tok)
-            continue
-        rsp = build_dir / tok[1:]
-        if not rsp.is_file():
-            # ninja deletes the response file after linking. Link the DLL once more with -d keeprsp (only the
-            # link step runs, from the same objects and libraries), keep the file, then put the original back.
-            dll = build_dir / 'libmpv-2.dll'
-            backup = build_dir / 'libmpv-2.dll.inventory-backup'
-            os.replace(dll, backup)
-            try:
-                subprocess.run(['ninja', '-C', str(build_dir), '-d', 'keeprsp', 'libmpv-2.dll'], check=True)
-            finally:
-                if dll.exists():
-                    dll.unlink()
-                os.replace(backup, dll)
-        print('inventory: reading', rsp)
-        tokens += shlex.split(rsp.read_text(errors='replace'))
-    return tokens
+    members = {}
+    text = map_file.read_text(errors='replace')
+    for line in text.split('Archive member included', 1)[-1].splitlines():
+        if line.startswith(('Discarded input sections', 'Memory Configuration', 'Allocating common symbols')):
+            break
+        match = re.match(r'^(\S.*?\.(?:a|lib))\(', line)
+        if match:
+            path = os.path.realpath(match.group(1) if os.path.isabs(match.group(1))
+                                    else build_dir / match.group(1))
+            members[path] = members.get(path, 0) + 1
+    print(f'inventory: {sum(members.values())} archive members from {len(members)} libraries are inside the DLL')
+    return tokens, members
 
 
 def compiler_dirs() -> list:
@@ -129,7 +146,7 @@ def stem_of(filename: str) -> str:
 
 
 def linked_libraries(build_dir: Path, prefix: str) -> list:
-    tokens = link_line(build_dir)
+    tokens, members = link_line(build_dir)
     toolchain = [os.path.realpath(d) for d in compiler_dirs()]
     search = [t[2:] for t in tokens if t.startswith('-L')] + [os.path.join(prefix, 'lib')] + toolchain
     found, seen = [], set()
@@ -168,7 +185,9 @@ def linked_libraries(build_dir: Path, prefix: str) -> list:
                 origin = 'toolchain'
             else:
                 origin = 'other'
-            found.append({'stem': stem, 'file': real, 'origin': origin})
+            taken = members.get(real) if real.endswith(('.a', '.lib')) else None
+            found.append({'stem': stem, 'file': real, 'origin': origin,
+                          'members_in_dll': taken if taken is not None else 0, 'in_dll': bool(taken)})
     return found
 
 
@@ -329,11 +348,14 @@ def main() -> int:
         lib.update(entry)
         pkg = by_stem.get(lib['stem'])
         lib['pkgconfig'] = f'{pkg[0]} {pkg[1]}' if pkg else ''
-        if lib['class'] not in ALLOWED:
+        if lib['class'] not in ALLOWED and not lib['in_dll'] and lib['file'].endswith('.a') \
+                and not lib['file'].endswith('.dll.a'):
+            lib['note'] = 'on the link line, but the linker took nothing from it (map file): not in the DLL'
+        elif lib['class'] not in ALLOWED:
             problems.append(f"linked library {lib['stem']} ({lib['file'] or 'not found'}): "
                             f"{lib['licence']} [{lib['class']}]")
 
-    if len(libs) < 10 or not any(x['stem'] == 'avcodec' for x in libs):
+    if len(libs) < 10 or not any(x['stem'] == 'avcodec' and x['in_dll'] for x in libs):
         problems.append(f'link line not understood: only {len(libs)} libraries found (expected FFmpeg and more)')
 
     crates, crate_error = rust_crates(Path('subrandr/Cargo.toml'))
@@ -406,8 +428,10 @@ def markdown(m: dict) -> str:
           for c in m['cloned_sources']]
     L += ['', f"Meson wraps: {', '.join(m['meson_wraps']) or '-'}; cppwinrt: {', '.join(m['cppwinrt']) or '-'}",
           '', '## Libraries linked into libmpv-2.dll', '',
-          '| library | licence | class | project | pkg-config | origin |', '|---|---|---|---|---|---|']
-    L += [f"| {x['stem']} | {x['licence']} | {x['class']} | {x['project']} | {x['pkgconfig']} | {x['origin']} |"
+          '| library | licence | class | project | pkg-config | origin | objects inside the DLL |',
+          '|---|---|---|---|---|---|---|']
+    L += [f"| {x['stem']} | {x['licence']} | {x['class']} | {x['project']} | {x['pkgconfig']} | {x['origin']} | "
+          f"{x['members_in_dll'] if x['file'].endswith(('.a', '.lib')) else '-'}{' - ' + x['note'] if x.get('note') else ''} |"
           for x in m['linked_libraries']]
     L += ['', '## Rust crates inside subrandr', '', '| crate | version | licence | class |', '|---|---|---|---|']
     L += [f"| {c['name']} | {c['version']} | {c['licence']} | {c['class']} |" for c in m['rust_crates_in_subrandr']]

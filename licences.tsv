@@ -153,3 +153,13 @@ atomic	GPL-3.0-or-later WITH GCC-exception-3.1	runtime	GCC runtime library	toolc
 quadmath	LGPL-2.1-or-later	lgpl	GCC libquadmath	toolchain
 winpthread	MIT AND BSD-3-Clause	runtime	mingw-w64 winpthreads	toolchain
 pthread	MIT AND BSD-3-Clause	runtime	mingw-w64 winpthreads	toolchain
+gomp	GPL-3.0-or-later WITH GCC-exception-3.1	runtime	GCC libgomp (OpenMP runtime)	toolchain
+lcevc_dec_api_utility	BSD-3-Clause-Clear	permissive	LCEVCdec	50-lcevcdec
+lcevc_dec_pipeline_cpu	BSD-3-Clause-Clear	permissive	LCEVCdec	50-lcevcdec
+lcevc_dec_pipeline	BSD-3-Clause-Clear	permissive	LCEVCdec	50-lcevcdec
+lcevc_dec_enhancement	BSD-3-Clause-Clear	permissive	LCEVCdec	50-lcevcdec
+lcevc_dec_pixel_processing	BSD-3-Clause-Clear	permissive	LCEVCdec	50-lcevcdec
+lcevc_dec_common	BSD-3-Clause-Clear	permissive	LCEVCdec	50-lcevcdec
+png18	libpng-2.0	permissive	libpng	25-libpng
+lcms2_fast_float	GPL-3.0-or-later (plugins/fast_float/COPYING.GPL3)	gpl	Little CMS fast-float plugin	45-lcms2
+lcms2_threaded	GPL-3.0-or-later (plugins/threaded/COPYING.GPL3)	gpl	Little CMS multithreaded plugin	45-lcms2
