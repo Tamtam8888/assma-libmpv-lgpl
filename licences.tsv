@@ -1,0 +1,155 @@
+# Licence of every library that may end up inside libmpv-2.dll (static build).
+# Key = library file stem as linked (-l<stem> / lib<stem>.a). Class decides the release gate:
+#   lgpl, mpl, permissive, runtime  -> allowed in a closed program when the licence terms are met
+#   gpl, nonfree                    -> forbidden: the build stops
+#   (a library not in this table)   -> unknown: the build stops until it is checked and added here
+# Entries were checked against each project's licence file; "verify" in the note marks one to re-check
+# when the library changes. Source repository and commit of each library: the FFmpeg-Builds image
+# revision (scripts.d/*, SCRIPT_REPO / SCRIPT_COMMIT) or pins.lock / the manifest.
+#stem	licence	class	project	source (FFmpeg-Builds stage script, mpv:<folder> cloned by the recipe, or toolchain)
+avcodec	LGPL-3.0-or-later (FFmpeg, --enable-version3)	lgpl	FFmpeg	mpv:ffmpeg
+avformat	LGPL-3.0-or-later (FFmpeg)	lgpl	FFmpeg	mpv:ffmpeg
+avutil	LGPL-3.0-or-later (FFmpeg)	lgpl	FFmpeg	mpv:ffmpeg
+avfilter	LGPL-3.0-or-later (FFmpeg)	lgpl	FFmpeg	mpv:ffmpeg
+avdevice	LGPL-3.0-or-later (FFmpeg)	lgpl	FFmpeg	mpv:ffmpeg
+swscale	LGPL-3.0-or-later (FFmpeg)	lgpl	FFmpeg	mpv:ffmpeg
+swresample	LGPL-3.0-or-later (FFmpeg)	lgpl	FFmpeg	mpv:ffmpeg
+postproc	GPL-2.0-or-later (FFmpeg libpostproc)	gpl	FFmpeg	mpv:ffmpeg
+iconv	LGPL-2.1-or-later	lgpl	GNU libiconv	20-libiconv
+charset	LGPL-2.1-or-later	lgpl	GNU libiconv	20-libiconv
+z	Zlib	permissive	zlib	20-zlib
+zlib	Zlib	permissive	zlib	20-zlib
+fribidi	LGPL-2.1-or-later	lgpl	GNU FriBidi	25-fribidi
+gmp	LGPL-3.0-or-later OR GPL-2.0-or-later	lgpl	GMP	25-gmp
+ogg	BSD-3-Clause	permissive	Xiph libogg	25-libogg
+png16	libpng-2.0	permissive	libpng	25-libpng
+png	libpng-2.0	permissive	libpng	25-libpng
+xml2	MIT	permissive	libxml2	25-libxml2
+ssl	Apache-2.0	permissive	OpenSSL 3	25-openssl
+crypto	Apache-2.0	permissive	OpenSSL 3	25-openssl
+lzma	0BSD	permissive	XZ Utils	25-xz
+brotlienc	MIT	permissive	Brotli	45-brotli
+brotlidec	MIT	permissive	Brotli	45-brotli
+brotlicommon	MIT	permissive	Brotli	45-brotli
+ffi	MIT	permissive	libffi	45-libffi
+samplerate	BSD-2-Clause	permissive	libsamplerate	45-libsamplerate
+udfread	LGPL-2.1-or-later	lgpl	libudfread	45-libudfread
+unibreak	Zlib	permissive	libunibreak	45-libunibreak
+vorbis	BSD-3-Clause	permissive	Xiph libvorbis	45-libvorbis
+vorbisenc	BSD-3-Clause	permissive	Xiph libvorbis	45-libvorbis
+vorbisfile	BSD-3-Clause	permissive	Xiph libvorbis	45-libvorbis
+OpenCL	Apache-2.0	permissive	Khronos OpenCL ICD loader	45-opencl
+pcre2-8	BSD-3-Clause WITH PCRE2-exception	permissive	PCRE2	45-pcre2
+pixman-1	MIT	permissive	pixman	45-pixman
+vmaf	BSD-2-Clause-Patent	permissive	Netflix VMAF	45-vmaf
+xxhash	BSD-2-Clause	permissive	xxHash	45-xxhash
+zstd	BSD-3-Clause OR GPL-2.0-only	permissive	Zstandard	45-zstd
+aom	BSD-2-Clause + AOMedia patent licence	permissive	libaom	50-aom
+gme	LGPL-2.1-or-later	lgpl	Game Music Emu	50-gme
+kvazaar	BSD-3-Clause	permissive	Kvazaar	50-kvazaar
+aribb24	LGPL-3.0-or-later	lgpl	aribb24	50-libaribb24
+aribcaption	MIT	permissive	libaribcaption	50-libaribcaption
+ass	ISC	permissive	libass	50-libass
+bluray	LGPL-2.1-or-later	lgpl	libbluray	50-libbluray
+mp3lame	LGPL-2.0-or-later	lgpl	LAME	50-libmp3lame
+opus	BSD-3-Clause	permissive	Opus	50-libopus
+ssh	LGPL-2.1-only	lgpl	libssh	50-libssh
+theora	BSD-3-Clause	permissive	Xiph Theora	50-libtheora
+theoraenc	BSD-3-Clause	permissive	Xiph Theora	50-libtheora
+theoradec	BSD-3-Clause	permissive	Xiph Theora	50-libtheora
+vpx	BSD-3-Clause	permissive	libvpx	50-libvpx
+webp	BSD-3-Clause	permissive	libwebp	50-libwebp
+webpmux	BSD-3-Clause	permissive	libwebp	50-libwebp
+webpdemux	BSD-3-Clause	permissive	libwebp	50-libwebp
+sharpyuv	BSD-3-Clause	permissive	libwebp	50-libwebp
+zmq	MPL-2.0	mpl	ZeroMQ	50-libzmq
+opencore-amrnb	Apache-2.0	permissive	opencore-amr	50-opencore-amr
+opencore-amrwb	Apache-2.0	permissive	opencore-amr	50-opencore-amr
+openh264	BSD-2-Clause	permissive	OpenH264 (source build, no Cisco binary)	50-openh264
+openjp2	BSD-2-Clause	permissive	OpenJPEG	50-openjpeg
+openmpt	BSD-3-Clause	permissive	libopenmpt	50-openmpt
+SDL2	Zlib	permissive	SDL 2	50-sdl
+snappy	BSD-3-Clause	permissive	Snappy	50-snappy
+soxr	LGPL-2.1-or-later	lgpl	SoX Resampler	50-soxr
+srt	MPL-2.0	mpl	SRT	50-srt
+twolame	LGPL-2.1-or-later	lgpl	TwoLAME	50-twolame
+zimg	WTFPL	permissive	zimg	50-zimg
+freetype	FTL OR GPL-2.0-or-later	permissive	FreeType	45-fonts/50-freetype
+fontconfig	HPND-like (MIT style)	permissive	Fontconfig	45-fonts/35-fontconfig
+harfbuzz	MIT	permissive	HarfBuzz	45-fonts/45-harfbuzz
+harfbuzz-subset	MIT	permissive	HarfBuzz	45-fonts/45-harfbuzz
+psl	MIT	permissive	libpsl	50-libcurl/40-libpsl
+nghttp2	MIT	permissive	nghttp2	50-libcurl/40-nghttp2
+nghttp3	MIT	permissive	nghttp3	50-libcurl/40-nghttp3
+ngtcp2	MIT	permissive	ngtcp2	50-libcurl/40-ngtcp2
+ngtcp2_crypto_ossl	MIT	permissive	ngtcp2	50-libcurl/40-ngtcp2
+ngtcp2_crypto_quictls	MIT	permissive	ngtcp2	50-libcurl/40-ngtcp2
+curl	curl (MIT style)	permissive	curl	50-libcurl/50-libcurl
+mbedtls	Apache-2.0 OR GPL-2.0-or-later	permissive	Mbed TLS	50-librist/40-mbedtls
+mbedcrypto	Apache-2.0 OR GPL-2.0-or-later	permissive	Mbed TLS	50-librist/40-mbedtls
+mbedx509	Apache-2.0 OR GPL-2.0-or-later	permissive	Mbed TLS	50-librist/40-mbedtls
+tfpsacrypto	Apache-2.0 OR GPL-2.0-or-later	permissive	TF-PSA-Crypto (Mbed TLS 4)	50-librist/40-mbedtls
+rist	BSD-2-Clause	permissive	librist	50-librist/50-librist
+dav1d	BSD-2-Clause	permissive	dav1d	50-dav1d
+placebo	LGPL-2.1-or-later	lgpl	libplacebo	50-libplacebo
+jxl	BSD-3-Clause	permissive	libjxl	50-libjxl/50-libjxl
+jxl_threads	BSD-3-Clause	permissive	libjxl	50-libjxl/50-libjxl
+jxl_cms	BSD-3-Clause	permissive	libjxl	50-libjxl/50-libjxl
+hwy	Apache-2.0 OR BSD-3-Clause	permissive	Highway (libjxl submodule)	50-libjxl/50-libjxl
+lcevc_dec_api	BSD-3-Clause-Clear	permissive	LCEVCdec	50-lcevcdec
+lcevc_dec_core	BSD-3-Clause-Clear	permissive	LCEVCdec	50-lcevcdec
+oapv	BSD-3-Clause	permissive	OpenAPV	50-openapv
+SvtAv1Enc	BSD-3-Clause-Clear + AOMedia patent licence	permissive	SVT-AV1	50-svtav1
+SvtAv1Dec	BSD-3-Clause-Clear + AOMedia patent licence	permissive	SVT-AV1	50-svtav1
+uavs3d	BSD-3-Clause	permissive	uavs3d	50-uavs3d
+vvenc	BSD-3-Clause-Clear	permissive	VVenC	50-vvenc
+vpl	MIT	permissive	oneVPL / libvpl	50-onevpl
+va	MIT	permissive	libva	50-vaapi/50-libva
+va_win32	MIT	permissive	libva	50-vaapi/50-libva
+vulkan-1	Apache-2.0	permissive	Vulkan loader	47-vulkan/45-vulkan-loader
+vulkan	Apache-2.0	permissive	Vulkan loader	47-vulkan/45-vulkan-loader
+shaderc_combined	Apache-2.0 (glslang parts BSD-3 / MIT; generated parser GPL-3 with Bison exception)	permissive	shaderc	47-vulkan/50-shaderc
+spirv-cross-c-shared	Apache-2.0	permissive	SPIRV-Cross	47-vulkan/55-spirv-cross
+spirv-cross-c	Apache-2.0	permissive	SPIRV-Cross	47-vulkan/55-spirv-cross
+spirv-cross-core	Apache-2.0	permissive	SPIRV-Cross	47-vulkan/55-spirv-cross
+spirv-cross-glsl	Apache-2.0	permissive	SPIRV-Cross	47-vulkan/55-spirv-cross
+spirv-cross-hlsl	Apache-2.0	permissive	SPIRV-Cross	47-vulkan/55-spirv-cross
+spirv-cross-msl	Apache-2.0	permissive	SPIRV-Cross	47-vulkan/55-spirv-cross
+spirv-cross-cpp	Apache-2.0	permissive	SPIRV-Cross	47-vulkan/55-spirv-cross
+spirv-cross-reflect	Apache-2.0	permissive	SPIRV-Cross	47-vulkan/55-spirv-cross
+spirv-cross-util	Apache-2.0	permissive	SPIRV-Cross	47-vulkan/55-spirv-cross
+lcms2	MIT	permissive	Little CMS	45-lcms2
+dovi	MIT	permissive	libdovi	50-libplacebo
+lilv-0	ISC	permissive	lilv	50-lilv/99-lilv
+serd-0	ISC	permissive	serd	50-lilv/96-serd
+sord-0	ISC	permissive	sord	50-lilv/97-sord
+sratom-0	ISC	permissive	sratom	50-lilv/98-sratom
+zix-0	ISC	permissive	zix	50-lilv/96-zix
+chromaprint	LGPL-2.1-or-later	lgpl	Chromaprint	50-chromaprint
+luajit	MIT	permissive	LuaJIT	mpv:LuaJIT
+luajit-5.1	MIT	permissive	LuaJIT	mpv:LuaJIT
+sixel	MIT	permissive	libsixel	mpv:libsixel
+archive	BSD-2-Clause	permissive	libarchive	mpv:libarchive
+uchardet	MPL-1.1 OR GPL-2.0-or-later OR LGPL-2.1-or-later	mpl	uchardet	mpv:uchardet
+subrandr	MPL-2.0	mpl	subrandr	mpv:subrandr
+vapoursynth	LGPL-2.1-or-later	lgpl	VapourSynth	50-vapoursynth
+vapoursynth-script	LGPL-2.1-or-later	lgpl	VapourSynth	50-vapoursynth
+mujs	ISC	permissive	MuJS	mpv:subprojects
+fftw3	GPL-2.0-or-later	gpl	FFTW (present in the image for rubberband; must not be linked)	25-fftw3
+rubberband	GPL-2.0-or-later	gpl	Rubber Band (GPL build only)	50-rubberband
+dvdnav	GPL-2.0-or-later	gpl	libdvdnav (GPL build only)	-
+dvdread	GPL-2.0-or-later	gpl	libdvdread (GPL build only)	-
+dvdcss	GPL-2.0-or-later	gpl	libdvdcss (GPL build only)	-
+x264	GPL-2.0-or-later	gpl	x264 (GPL build only)	-
+x265	GPL-2.0-or-later	gpl	x265 (GPL build only)	-
+fdk-aac	FDK-AAC (nonfree)	nonfree	fdk-aac (nonfree build only)	-
+# compiler runtime (from the toolchain, not from a library project)
+stdc++	GPL-3.0-or-later WITH GCC-exception-3.1	runtime	GCC runtime library	toolchain
+gcc	GPL-3.0-or-later WITH GCC-exception-3.1	runtime	GCC runtime library	toolchain
+gcc_eh	GPL-3.0-or-later WITH GCC-exception-3.1	runtime	GCC runtime library	toolchain
+gcc_s	GPL-3.0-or-later WITH GCC-exception-3.1	runtime	GCC runtime library	toolchain
+ssp	GPL-3.0-or-later WITH GCC-exception-3.1	runtime	GCC runtime library	toolchain
+atomic	GPL-3.0-or-later WITH GCC-exception-3.1	runtime	GCC runtime library	toolchain
+quadmath	LGPL-2.1-or-later	lgpl	GCC libquadmath	toolchain
+winpthread	MIT AND BSD-3-Clause	runtime	mingw-w64 winpthreads	toolchain
+pthread	MIT AND BSD-3-Clause	runtime	mingw-w64 winpthreads	toolchain

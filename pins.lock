@@ -1,0 +1,13 @@
+# Exact source versions for the libraries that mpv's ci/build-mingw64-full.sh clones.
+# The script clones the newest commit of a branch; tools/git-pin-shim checks out the commit below instead,
+# so a rebuild uses the same sources. One line per repository: URL  COMMIT
+# Commits taken 13.11.2026 (they are the ones the first release libmpv-lgpl-v0.42.0-dev-gfe753a782 was built from;
+# FFmpeg's is confirmed by that release's BUILDINFO.txt).
+# To move to newer sources: change a commit here, run the workflow, check the inventory, test in ASSMA.
+https://github.com/FFmpeg/FFmpeg.git            4b0fad0c61a9ba93e7bc8a469dac8ff208a45d7b
+https://github.com/LuaJIT/LuaJIT.git            63c8f1a9b479ba5518cf6a170ff7729178bc3cfd
+https://github.com/saitoha/libsixel.git         3c9fd6a294b2d0338482f9a5d5772827d82cfa9d
+https://github.com/libarchive/libarchive.git    4a5944b726d24c8e86589ad09cef958c6f1a6e9c
+https://github.com/afishhh/subrandr.git         c5474ada85b1b80f7ffe9dac52a88f85c77accd2
+https://github.com/microsoft/windows-rs.git     65c0c07b5b88ac031cf56acddd9f892efee1634a
+# uchardet is cloned at tag v0.0.8; its commit is recorded in the manifest and checked here once known.

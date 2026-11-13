@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# git wrapper used only during the libmpv build (put first in PATH by the workflow).
+#
+# Why: mpv's official build script clones the newest commit of each library ("git clone --depth=1 URL").
+# We keep that script unchanged (it is the recipe mpv itself uses), so instead of editing it, this wrapper
+# lets the clone happen and then moves the clone to the exact commit listed in pins.lock.
+# Every clone is written to $PIN_LOG (URL, folder, commit, pinned or not) for the build manifest.
+# Any other git command is passed through untouched.
+set -euo pipefail
+real="${REAL_GIT:?REAL_GIT not set}"
+[ "${1-}" = clone ] || exec "$real" "$@"
+
+"$real" "$@"
+
+# find URL and target folder (the positional arguments after "clone")
+positional=()
+args=("${@:2}")
+i=0
+while [ $i -lt ${#args[@]} ]; do
+    a="${args[$i]}"
+    case "$a" in
+        -b|--branch|-o|--origin|--depth|--filter|-c|--config|--reference|--separate-git-dir|-j|--jobs)
+            i=$((i + 2)); continue ;;
+        -*) ;;
+        *) positional+=("$a") ;;
+    esac
+    i=$((i + 1))
+done
+url="${positional[0]}"
+dir="${positional[1]:-$(basename "$url" .git)}"
+
+pin="$(awk -v u="$url" '$1 == u { print $2 }' "${PIN_FILE:?}" | head -n 1)"
+pinned=no
+if [ -n "$pin" ]; then
+    before="$("$real" -C "$dir" rev-parse HEAD)"
+    if [ "$before" != "$pin" ]; then
+        "$real" -C "$dir" fetch -q --depth=1 origin "$pin"
+        "$real" -C "$dir" -c advice.detachedHead=false checkout -q --detach FETCH_HEAD
+        if [ -f "$dir/.gitmodules" ]; then
+            "$real" -C "$dir" submodule update -q --init --recursive --depth=1
+        fi
+    fi
+    [ "$("$real" -C "$dir" rev-parse HEAD)" = "$pin" ] || { echo "pin shim: $url is not at $pin" >&2; exit 1; }
+    pinned=yes
+fi
+commit="$("$real" -C "$dir" rev-parse HEAD)"
+printf '%s\t%s\t%s\t%s\n' "$url" "$dir" "$commit" "$pinned" >> "${PIN_LOG:?}"
+echo "pin shim: $url -> $commit (pinned: $pinned)" >&2
