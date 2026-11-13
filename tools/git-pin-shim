@@ -44,5 +44,5 @@ if [ -n "$pin" ]; then
     pinned=yes
 fi
 commit="$("$real" -C "$dir" rev-parse HEAD)"
-printf '%s\t%s\t%s\t%s\n' "$url" "$dir" "$commit" "$pinned" >> "${PIN_LOG:?}"
+printf '%s\t%s\t%s\t%s\n' "$url" "$(realpath "$dir")" "$commit" "$pinned" >> "${PIN_LOG:?}"
 echo "pin shim: $url -> $commit (pinned: $pinned)" >&2

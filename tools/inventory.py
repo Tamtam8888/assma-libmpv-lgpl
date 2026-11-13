@@ -48,7 +48,9 @@ def sha256(path: Path) -> str:
 def run(*cmd, cwd=None) -> str:
     try:
         return subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
-    except (OSError, subprocess.CalledProcessError) as e:
+    except subprocess.CalledProcessError as e:
+        return f'ERROR: {e}: {(e.stderr or "").strip()[-800:]}'
+    except OSError as e:
         return f'ERROR: {e}'
 
 
@@ -77,17 +79,20 @@ def pkgconfig_index(prefix: str) -> tuple[dict, list]:
 
 
 def link_line(build_dir: Path) -> list:
-    """Tokens of the link command of libmpv-2.dll, from meson's build.ninja."""
-    text = (build_dir / 'build.ninja').read_text(encoding='utf-8', errors='replace')
-    match = re.search(r'^build libmpv-2\.dll[^\n]*\n((?: [^\n]*\n)+)', text, flags=re.MULTILINE)
-    if not match:
-        raise SystemExit('inventory: link rule of libmpv-2.dll not found in build.ninja')
-    head = text[match.start():text.index('\n', match.start())]
-    tokens = shlex.split(head.split(':', 1)[1].replace('$ ', ' '))
-    for line in match.group(1).splitlines():
-        key, _, value = line.strip().partition('=')
-        if key.strip() == 'LINK_ARGS':
-            tokens += shlex.split(value.replace('$ ', ' '))
+    """Tokens of the command that linked libmpv-2.dll, exactly as ninja ran it (`ninja -t commands`).
+    If the command passes its arguments in a response file (@file.rsp), that file is read too."""
+    out = subprocess.run(['ninja', '-C', str(build_dir), '-t', 'commands', 'libmpv-2.dll'],
+                         check=True, capture_output=True, text=True).stdout.strip().splitlines()
+    if not out:
+        raise SystemExit('inventory: ninja gave no command for libmpv-2.dll')
+    command = out[-1]
+    print('inventory: link command of libmpv-2.dll (first 600 characters):', command[:600])
+    tokens = []
+    for tok in shlex.split(command):
+        if tok.startswith('@') and (build_dir / tok[1:]).is_file():
+            tokens += shlex.split((build_dir / tok[1:]).read_text(errors='replace'))
+        else:
+            tokens.append(tok)
     return tokens
 
 
@@ -156,9 +161,13 @@ def linked_libraries(build_dir: Path, prefix: str) -> list:
 def rust_crates(manifest: Path) -> tuple[list, str]:
     if not manifest.is_file():
         return [], 'subrandr/Cargo.toml not found'
-    out = run('cargo', 'metadata', '--format-version', '1', '--offline', '--locked',
-              '--filter-platform', os.environ.get('FFBUILD_RUST_TARGET', 'x86_64-pc-windows-gnu'),
-              '--manifest-path', str(manifest))
+    base = ['cargo', 'metadata', '--format-version', '1', '--locked',
+            '--filter-platform', os.environ.get('FFBUILD_RUST_TARGET', 'x86_64-pc-windows-gnu'),
+            '--manifest-path', str(manifest)]
+    out = run(*base, '--offline')
+    if out.startswith('ERROR'):                      # index not cached: same lock file, read online
+        print('inventory: cargo metadata offline failed, trying online:', out)
+        out = run(*base)
     if out.startswith('ERROR'):
         return [], out
     data = json.loads(out)
@@ -205,7 +214,7 @@ def collect_licences(out: Path, clones: list, crates: list) -> list:
     problems = []
     base = out / 'licences'
     trees = {'mpv': Path('.')}
-    trees.update({c['folder']: Path(c['folder']) for c in clones})
+    trees.update({Path(c['folder']).name: Path(c['folder']) for c in clones})
     trees.update({p.name: p for p in Path('subprojects').glob('*') if p.is_dir() and p.name != 'packagecache'})
     trees.update({p.name: p for p in Path('.').glob('cppwinrt-*') if p.is_dir()})
     for name, tree in sorted(trees.items()):
@@ -309,6 +318,9 @@ def main() -> int:
         if lib['class'] not in ALLOWED:
             problems.append(f"linked library {lib['stem']} ({lib['file'] or 'not found'}): "
                             f"{lib['licence']} [{lib['class']}]")
+
+    if len(libs) < 10 or not any(x['stem'] == 'avcodec' for x in libs):
+        problems.append(f'link line not understood: only {len(libs)} libraries found (expected FFmpeg and more)')
 
     crates, crate_error = rust_crates(Path('subrandr/Cargo.toml'))
     for c in crates:

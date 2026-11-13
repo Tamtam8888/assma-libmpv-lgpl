@@ -10,4 +10,6 @@ https://github.com/saitoha/libsixel.git         3c9fd6a294b2d0338482f9a5d5772827
 https://github.com/libarchive/libarchive.git    4a5944b726d24c8e86589ad09cef958c6f1a6e9c
 https://github.com/afishhh/subrandr.git         c5474ada85b1b80f7ffe9dac52a88f85c77accd2
 https://github.com/microsoft/windows-rs.git     65c0c07b5b88ac031cf56acddd9f892efee1634a
-# uchardet is cloned at tag v0.0.8; its commit is recorded in the manifest and checked here once known.
+https://gitlab.freedesktop.org/uchardet/uchardet.git ae6302a016088ad07177f86d417b20010053632b
+# winmd: cloned by cppwinrt's own CMake build (not by the recipe directly); commit from build b6.
+https://github.com/microsoft/winmd.git           e3b05fe93b8cb69147f35f0e3610480f65e3ddf6
