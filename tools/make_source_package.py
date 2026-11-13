@@ -102,6 +102,39 @@ def describe_repo(work: Path, base: Path, lists: Path, label: str) -> dict:
             'changed_by_download_step': changed, 'added_by_download_step': added}
 
 
+def blob_id(path: Path) -> str:
+    data = os.readlink(path).encode() if path.is_symlink() else path.read_bytes()
+    return hashlib.sha1(b'blob %d\0' % len(data) + data).hexdigest()
+
+
+def recover_listing(remote: str, commit: str, folder: Path, base: Path, lists: Path, label: str) -> dict:
+    """Listing of a commit whose .git the download step removed, fetched from the remote; folder checked against it."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as g:
+        sh('git', '-C', g, 'init', '-q')
+        sh('git', '-C', g, 'fetch', '-q', '--depth=1', '--filter=blob:none', remote, commit)
+        tree = sh('git', '-C', g, 'ls-tree', '-r', '--full-tree', 'FETCH_HEAD')
+    entries = []
+    mismatches = 0
+    for line in tree.splitlines():
+        meta, _, rel = line.partition('\t')
+        mode, kind, blob = meta.split()
+        entries.append(f'{mode} {blob} 0\t{rel}')
+        if kind == 'blob':
+            p = folder / rel
+            if not (p.exists() or p.is_symlink()) or blob_id(p) != blob:
+                mismatches += 1
+    listing = '\n'.join(entries) + '\n'
+    rel = folder.relative_to(base).as_posix()
+    name = re.sub(r'[^A-Za-z0-9._-]+', '_', f'{label}__{rel}')
+    (lists / f'{name}.lsfiles').write_text(listing, encoding='utf-8')
+    return {'path': rel, 'remote': remote, 'commit': commit, 'commit_date': '', 'sparse': False,
+            'tracked_files': len(entries), 'lsfiles': f'lists/{name}.lsfiles',
+            'lsfiles_sha256': hashlib.sha256(listing.encode()).hexdigest(), 'changed_by_download_step': [],
+            'added_by_download_step': [], 'mismatches': mismatches,
+            'note': '.git removed by the download step; listing fetched from the remote and checked file by file'}
+
+
 def pack(src: Path, dest: Path) -> dict:
     """tar.xz of a source tree without VCS folders; returns name, size and SHA-256."""
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -260,10 +293,33 @@ def image_sources(m: dict, ffb: Path, out: Path, work: Path) -> list:
         # every declared commit must be the HEAD of one of the fetched repositories (tags resolved by git)
         for key, value in declared.items():
             if key.startswith('SCRIPT_COMMIT'):
-                hit = any(rp['commit'] == value for rp in repos) or any(
-                    sh('git', '-C', str(dest / rp['path']), 'rev-parse', f'{value}^{{commit}}', check_=False) == rp['commit']
-                    for rp in repos)
-                check(hit, f'image {stage}: {key} {value[:16]} is the fetched commit')
+                n = key[len('SCRIPT_COMMIT'):]
+                remote = declared.get(f'SCRIPT_REPO{n}', '')
+                target = value
+                if not re.fullmatch(r'[0-9a-f]{40}', value) and remote:      # a tag: resolve it at the remote
+                    ls = sh('git', 'ls-remote', remote, f'refs/tags/{value}', f'refs/tags/{value}^{{}}', check_=False)
+                    peeled = [l.split()[0] for l in ls.splitlines() if l.endswith('^{}')]
+                    plain = [l.split()[0] for l in ls.splitlines() if not l.endswith('^{}')]
+                    target = (peeled or plain or [value])[0]
+                hit = any(rp['commit'] == target for rp in repos)
+                if not hit and remote:
+                    # the download step deleted this repository's .git (e.g. libiconv's gnulib): check the folder
+                    # file by file against the commit's tree fetched from the remote
+                    mdir = re.search(r'git -C (\S+) checkout "?' + re.escape(value), dl)
+                    folder = (dest / mdir.group(1).split('/')[-1]) if mdir else None
+                    if mdir and not (dest / mdir.group(1)).exists():
+                        folder = next((p for p in dest.rglob(mdir.group(1).split('/')[-1]) if p.is_dir()), None)
+                    if folder and folder.is_dir() and not (folder / '.git').exists():
+                        rec = recover_listing(remote, value, folder, dest, out / 'lists', f'image_{stage}')
+                        repos.append(rec)
+                        hit = rec['mismatches'] == 0
+                        for rp in repos:
+                            if rp is not rec:
+                                pre = rec['path'] + '/'
+                                rp['added_by_download_step'] = [a for a in rp['added_by_download_step']
+                                                                if not (a + '/').startswith(pre)]
+                check(hit, f'image {stage}: {key} {value[:16]} is the fetched commit'
+                           + ('' if target == value else f' (tag -> {target[:12]})'))
             if key.startswith('SCRIPT_REV'):
                 check(any(s['revision'] == value for s in svn), f'image {stage}: svn revision {value} fetched')
         vchecks = []
@@ -328,6 +384,7 @@ def toolchain_licences(out: Path, work: Path) -> list:
     gcc_version = sh(cc, '-dumpfullversion', check_=False) or sh(cc, '-dumpversion', check_=False)
     header = sh(cc, '-print-sysroot', check_=False)
     mac = next(Path(header or '/').rglob('_mingw_mac.h'), None)
+    print('toolchain: mingw header', mac, flush=True)
     mingw_version = ''
     if mac:
         t = mac.read_text(errors='replace')
@@ -339,8 +396,14 @@ def toolchain_licences(out: Path, work: Path) -> list:
             mingw_version += f' ({rev.group(1)})'
     check(bool(mingw_version), f'toolchain: mingw-w64 headers say version {mingw_version or "?"}; GCC {gcc_version}')
     jobs = []
-    if mingw_version:
+    ctng = os.environ.get('CTNG_MINGW', '')          # version chosen in FFmpeg-Builds' ct-ng config, e.g. 14.0.0
+    if mingw_version or ctng:
         v = mingw_version.split(' ')[0]
+        if ctng and ctng != v:
+            check(None, f'toolchain: mingw-w64 headers say {mingw_version}, FFmpeg-Builds ct-ng config selects '
+                        f'{ctng}; licence texts are taken from the ct-ng release (headers may come from a newer '
+                        f'package in the image)')
+            v = ctng
         tag = f'v{v}'
         jobs.append(('mingw-w64', 'https://github.com/mingw-w64/mingw-w64.git', f'refs/tags/{tag}',
                      ['COPYING', 'DISCLAIMER', 'DISCLAIMER.PD', 'COPYING.MinGW-w64', 'COPYING.MinGW-w64-runtime',

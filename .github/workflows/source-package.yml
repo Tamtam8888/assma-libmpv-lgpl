@@ -71,6 +71,8 @@ jobs:
           IMAGE: ${{ inputs.image }}
         run: |
           set -u
+          export CTNG_MINGW=$(sed -n 's/^CT_MINGW_W64_VERSION="v\{0,1\}\([^"]*\)"/\1/p' ffb/images/base-win64/ct-ng-config)
+          echo "ct-ng mingw-w64: $CTNG_MINGW"
           python3 assma/tools/make_source_package.py --manifest MANIFEST.json --ffb ffb --repo "$GITHUB_WORKSPACE/assma-build" \
             --out out --work /tmp/srcwork
           echo "status=$?" >> "$GITHUB_OUTPUT"
