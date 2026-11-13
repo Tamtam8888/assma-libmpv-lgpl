@@ -89,10 +89,24 @@ def link_line(build_dir: Path) -> list:
     print('inventory: link command of libmpv-2.dll (first 600 characters):', command[:600])
     tokens = []
     for tok in shlex.split(command):
-        if tok.startswith('@') and (build_dir / tok[1:]).is_file():
-            tokens += shlex.split((build_dir / tok[1:]).read_text(errors='replace'))
-        else:
+        if not tok.startswith('@'):
             tokens.append(tok)
+            continue
+        rsp = build_dir / tok[1:]
+        if not rsp.is_file():
+            # ninja deletes the response file after linking. Link the DLL once more with -d keeprsp (only the
+            # link step runs, from the same objects and libraries), keep the file, then put the original back.
+            dll = build_dir / 'libmpv-2.dll'
+            backup = build_dir / 'libmpv-2.dll.inventory-backup'
+            os.replace(dll, backup)
+            try:
+                subprocess.run(['ninja', '-C', str(build_dir), '-d', 'keeprsp', 'libmpv-2.dll'], check=True)
+            finally:
+                if dll.exists():
+                    dll.unlink()
+                os.replace(backup, dll)
+        print('inventory: reading', rsp)
+        tokens += shlex.split(rsp.read_text(errors='replace'))
     return tokens
 
 
@@ -324,6 +338,9 @@ def main() -> int:
 
     crates, crate_error = rust_crates(Path('subrandr/Cargo.toml'))
     for c in crates:
+        if c['source'] == 'local' and not c['licence']:
+            # subrandr's own workspace crates have no licence field; the repository's LICENSE file covers them
+            c['licence'] = 'MPL-2.0 (subrandr workspace crate; LICENSE file of the repository)'
         c['class'] = spdx_class(c['licence'])
         if c['class'] not in ALLOWED:
             problems.append(f"Rust crate {c['name']} {c['version']}: {c['licence'] or 'no licence field'}")
