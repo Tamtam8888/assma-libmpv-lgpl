@@ -47,13 +47,13 @@ zstd	BSD-3-Clause OR GPL-2.0-only	permissive	Zstandard	45-zstd
 aom	BSD-2-Clause + AOMedia patent licence	permissive	libaom	50-aom
 gme	LGPL-2.1-or-later	lgpl	Game Music Emu	50-gme
 kvazaar	BSD-3-Clause	permissive	Kvazaar	50-kvazaar
-aribb24	LGPL-3.0-or-later	lgpl	aribb24	50-libaribb24
+aribb24	LGPL-3.0 (COPYING) / file headers LGPL-2.1-or-later	lgpl	aribb24	50-libaribb24
 aribcaption	MIT	permissive	libaribcaption	50-libaribcaption
 ass	ISC	permissive	libass	50-libass
 bluray	LGPL-2.1-or-later	lgpl	libbluray	50-libbluray
 mp3lame	LGPL-2.0-or-later	lgpl	LAME	50-libmp3lame
 opus	BSD-3-Clause	permissive	Opus	50-libopus
-ssh	LGPL-2.1-only	lgpl	libssh	50-libssh
+ssh	LGPL-2.1-or-later; 25 files LGPL-2.1-only (curve25519, mlkem, sntrup761, pki_*)	lgpl	libssh	50-libssh
 theora	BSD-3-Clause	permissive	Xiph Theora	50-libtheora
 theoraenc	BSD-3-Clause	permissive	Xiph Theora	50-libtheora
 theoradec	BSD-3-Clause	permissive	Xiph Theora	50-libtheora
