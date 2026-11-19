@@ -116,3 +116,13 @@ Toplu test listesinin 59. maddesi bu derleme için şöyle genişler. Her adım 
 - [T] S2'den sonra DLL'de "yalnızca LGPL-2.1" başlıklı dosya kalmaz (libssh çıkar). Encoder ve ağ protokolü kodu da kalmaz.
 - [H] Çözücüler kalıyor: H.264, HEVC, VVC, AAC, AC-3, E-AC-3, DTS, TrueHD, Dolby E ve diğerleri. Bunların patent durumu bu planın kapsamı dışında. Sadeleştirme patent riskini azaltır, ortadan kaldırdığı söylenemez.
 - [H] Kalan LGPL-2.1-or-later ve LGPL-3.0-or-later bileşenlerin birlikte dağıtılması, ASSMA'nın kullanım koşulları (LGPL-2.1 §6) ve dağıtıcının kim olduğu: `LGPL_UYUM_DEGERLENDIRMESI.md` B2–B5 aynen duruyor.
+
+## 8. Not (19.11.2026, C# dönemi — K210, K238)
+- §2'deki "mpv altyazısı kapalı (`sid=no`)" gerekçesi C#'ta değişti: K210 gereği görünen track'ler tek bir ASS olarak
+  mpv'ye verilir, yani mpv'nin altyazı çizicisi (libass) **kullanılıyor**. Sonuç değişmez: libass, fontconfig, FreeType,
+  HarfBuzz, FriBidi zaten korunanlar listesinde; çıkarılan ARIB (aribb24 / aribcaption) ASSMA'da kullanılmıyor.
+- C#'ın ses grafiği (K238): `amerge`, `asplit`, `pan`, `volume`, `amix`, `join` — hepsi K-S1'de korunanlar listesinde.
+  §4'teki ses filtresi testine Python'un `mpv_audio.py` dizgileriyle birlikte K238 grafiği de eklenir
+  (assma reposu `prototype/K205_Bench/Bench/Runner.cs`, `AudioGraph`).
+- K205 prototipi `screenshot-raw` kullanıyor: ham piksel döndürür, kodlayıcı (encoder) gerektirmez → S2 ile çalışır.
+  Dosyaya ekran görüntüsü (PNG / JPEG) ise S2'den sonra mpv ile alınamaz; gerekirse ASSMA kendisi yazar.
