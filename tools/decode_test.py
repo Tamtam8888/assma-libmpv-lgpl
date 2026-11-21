@@ -45,7 +45,7 @@ GRAPHS = [
     ('pan + alimiter + volume (8 ch)', 'pcm8ch.wav',
      'lavfi=[pan=stereo|c0=0.5*c0+0.5*c2|c1=0.5*c1+0.5*c3,alimiter=limit=0.7,volume=0.8,asetpts=PTS-STARTPTS]', ''),
     ('channelsplit + join (8 ch)', 'pcm8ch.wav',
-     'lavfi=[channelsplit=channel_layout=7.1:channels=FL|FR[l][r];[l][r]join=inputs=2:channel_layout=stereo]', ''),
+     'lavfi=[channelsplit=channel_layout=7.1:channels=FL+FR[l][r];[l][r]join=inputs=2:channel_layout=stereo]', ''),
 ]
 
 
