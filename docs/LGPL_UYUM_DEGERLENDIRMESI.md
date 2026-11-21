@@ -55,7 +55,7 @@ Aşağıdaki 2. bölümdeki tablo 13.11'in fotoğrafı olarak duruyor. Güncel h
 | Y7 kütüphanelerin kaynağı | ✅ | ✅ | |
 | Y8 derlemeyi yöneten betikler | ⚠️ | ✅ | `scripts.tar`: FFmpeg-Builds (imajın revizyonu) + bu depo, derlemeyi yapan commit'teki hâliyle |
 | Y9 kaynağın ikiliye karşılığı | ⚠️ | ✅ / ⚠️ | Tarif kaynakları: arşivdeki ağaç = MANIFEST'teki commit. İmaj kütüphaneleri: her `SCRIPT_COMMIT` gerçekten indirildi, ve pkg-config sürümü kaynakta bulundu (14'ünde metin olarak yok, not edildi). İmajın hangi FFmpeg-Builds revizyonundan yapıldığı hâlâ dolaylı (B4). |
-| Y10 kaynağa erişim yolu | ⚠️ | ⚠️ | GitHub'da ikiliyle aynı yerde ✅. **ASSMA paketi için karar bekliyor:** kaynakları pakete koymak mı, yazılı teklif mi (K248 paket ilkesi: erişim bilgisi paketin içinde). |
+| Y10 kaynağa erişim yolu | ⚠️ | ✅ | GitHub'da ikiliyle aynı yerde. **ASSMA kararı K274 (21.11):** her dağıtım paketi `-sources` yayınının bütün dosyalarını içinde taşır; özetler paket üretilirken doğrulanır. Yazılı teklif kullanılmıyor. |
 | Y11 DLL'in değiştirilebilmesi | ✅ | ✅ | C# ASSMA da DLL'i çalışırken yüklüyor. Çözme testi aynı programı iki farklı DLL'le çalıştırıyor. |
 | Y12 yeniden derlenebilirlik | ✅ / ⚠️ | ✅ | Araç zinciri imajı artık kendi kayıt defterimizde, aynı özetle (`mirror-toolchain.yml`); betikler yayında |
 | Y13 ASSMA koşulları | ❓ | ❓ (ilke var) | K248: koşullar LGPL / MPL haklarını kısıtlamaz. Metin dağıtım biçimi belli olunca. |
