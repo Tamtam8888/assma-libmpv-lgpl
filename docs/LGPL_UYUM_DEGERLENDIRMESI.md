@@ -30,6 +30,50 @@ Değerlendirme, dağıtılan dosyaların kendisi üzerinden yapıldı: zip, ekle
   - Codec patentleri.
 - **Bu yayın için "LGPL'ye uygundur" onayı verilmiyor.**
 
+## 0a. Durum güncellemesi (21.11.2026)
+
+13.11'den sonra iki şey yapıldı:
+- **b10-sources:** b10'un eksiksiz, doğrulanabilir kaynak paketi (`source-package.yml`; REPORT: 165 kontrol geçti,
+  0 hata, 14 not). Paketin içeriği:
+  - bileşen bazında `NOTICE.md`;
+  - derlemeyi yöneten betikler (`scripts.tar`);
+  - araç zinciri lisansları;
+  - `verify_sources.py`.
+- **S2 (yayın `…-x64-s2-b16`):** kodlayıcılar, ağ ve kullanılmayan kütüphaneler DLL'den çıktı
+  (`S2_DEGISIKLIK_PLANI.md` §9).
+
+Aşağıdaki 2. bölümdeki tablo 13.11'in fotoğrafı olarak duruyor. Güncel hâli:
+
+| Madde | 13.11 | 21.11 | Kanıt / not |
+|---|---|---|---|
+| Y1 GPL kod yok | ✅ | ✅ | S2'de de kapı geçti (GPL / nonfree / bilinmeyen: 0 nesne) |
+| Y2 lisans metinleri | ✅ | ✅ | |
+| Y3 açık bildirim | ⚠️ | ✅ | `NOTICE.md`: DLL'deki her bileşen, kendi lisansı ve kaynağı. DLL'in bütünü için tek bir lisans iddia edilmiyor. ASSMA paketi bu dosyayı taşımalı (assma reposu CI). |
+| Y4 izin veren lisansların bildirimleri | ⚠️ | ✅ | mingw-w64 v14 (7 dosya) ve GCC 16.2 (5 dosya) metinleri kaynak paketinde |
+| Y5 Apache NOTICE | ⚠️ | ✅ | Bütün derinliklerde arandı; 5 dosya bulundu ve kopyalandı |
+| Y6 FreeType cümlesi | ⚠️ | ✅ | `NOTICE.md` "Special notices" ve ASSMA'nın `THIRD-PARTY-NOTICES.txt`'i |
+| Y7 kütüphanelerin kaynağı | ✅ | ✅ | |
+| Y8 derlemeyi yöneten betikler | ⚠️ | ✅ | `scripts.tar`: FFmpeg-Builds (imajın revizyonu) + bu depo, derlemeyi yapan commit'teki hâliyle |
+| Y9 kaynağın ikiliye karşılığı | ⚠️ | ✅ / ⚠️ | Tarif kaynakları: arşivdeki ağaç = MANIFEST'teki commit. İmaj kütüphaneleri: her `SCRIPT_COMMIT` gerçekten indirildi, ve pkg-config sürümü kaynakta bulundu (14'ünde metin olarak yok, not edildi). İmajın hangi FFmpeg-Builds revizyonundan yapıldığı hâlâ dolaylı (B4). |
+| Y10 kaynağa erişim yolu | ⚠️ | ⚠️ | GitHub'da ikiliyle aynı yerde ✅. **ASSMA paketi için karar bekliyor:** kaynakları pakete koymak mı, yazılı teklif mi (K248 paket ilkesi: erişim bilgisi paketin içinde). |
+| Y11 DLL'in değiştirilebilmesi | ✅ | ✅ | C# ASSMA da DLL'i çalışırken yüklüyor. Çözme testi aynı programı iki farklı DLL'le çalıştırıyor. |
+| Y12 yeniden derlenebilirlik | ✅ / ⚠️ | ✅ | Araç zinciri imajı artık kendi kayıt defterimizde, aynı özetle (`mirror-toolchain.yml`); betikler yayında |
+| Y13 ASSMA koşulları | ❓ | ❓ (ilke var) | K248: koşullar LGPL / MPL haklarını kısıtlamaz. Metin dağıtım biçimi belli olunca. |
+| Y15 MPL kaynağı | ✅ | ✅ | S2'den sonra MPL: yalnız subrandr ve uchardet (değiştirilmemiş, DLL içinde) |
+| Y16 / B1 libssh (LGPL-2.1-only) | ❓ | ✅ (teknik olarak kapandı) | S2: libssh'den 0 nesne. DLL'de "yalnız LGPL-2.1" dosya kalmadı. |
+| Y17 / B3 patentler | ❓ | ❓ (küçüldü) | Kodlayıcı 0. Çözücüler duruyor; patent değerlendirmesi kapsam dışı. |
+| B4 imajın kökeni | ❓ | ❓ (daraldı) | İmaj artık kaybolmuyor. Revizyon eşlemesi dolaylı, ama kaynak paketinin sürüm kontrolleriyle destekli. |
+| B5 dağıtıcı | ❓ | ❓ | K248: açık |
+
+`SADELESTIRME_ANALIZI.md`'deki K1–K7 eksikleri b10-sources ile kapandı:
+- K1 betikler ve yamalar `scripts.tar`'da.
+- K2 ikinci depolar (`SCRIPT_COMMIT2`) kaynakta.
+- K3 bu depo yayında.
+- K4 tarif kaynakları commit'le birebir; derleme ürünü yok.
+- K5 cppwinrt özeti kayıtlı.
+- K6 indirme adımının değiştirdiği dosyalar listelenmiş.
+- K7 araç zinciri lisansları eklendi.
+
 ## 1. Dağıtılan şey
 
 | Parça | İçerik |

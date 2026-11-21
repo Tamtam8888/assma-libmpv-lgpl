@@ -1,6 +1,7 @@
 # S2: FFmpeg tarafını sadeleştirme - değişiklik planı ve regresyon kontrolleri
 
-**Durum:** plan; onay bekliyor. Bu plan uygulanmadı, yeni DLL derlenmedi.
+**Durum (21.11.2026): uygulandı.** Yayın `libmpv-lgpl-v0.42.0-dev-gfe753a782-fe753a782-x64-s2-b16` (ilk yeşil koşu);
+uygulama notları ve sonuçlar §9'da. Plan metni aşağıda olduğu gibi duruyor.
 **Referans:** b10 (`libmpv-lgpl-v0.42.0-dev-gfe753a782-fe753a782-x64-b10`), değişmeden korunuyor.
 **Kararlar (13.11):**
 - S2 seçildi.
@@ -126,3 +127,52 @@ Toplu test listesinin 59. maddesi bu derleme için şöyle genişler. Her adım 
   (assma reposu `prototype/K205_Bench/Bench/Runner.cs`, `AudioGraph`).
 - K205 prototipi `screenshot-raw` kullanıyor: ham piksel döndürür, kodlayıcı (encoder) gerektirmez → S2 ile çalışır.
   Dosyaya ekran görüntüsü (PNG / JPEG) ise S2'den sonra mpv ile alınamaz; gerekirse ASSMA kendisi yazar.
+
+## 9. Uygulama (21.11.2026)
+
+**Araçlar** (hepsi bu depoda, `README.md` özetliyor):
+- `tools/ff_profile.py`: §1'deki dönüşüm. `s2` profilinin tanımı, korunması gerekenlerin listesi (`KEEP`; profil
+  bunlardan birine dokunursa araç çalışmaz) ve beklenen kayıp listeleri (çözücü, filtre, demuxer) bu dosyada.
+- `tools/ff_components.py`: K-S1 / K-S2. §6 adım 2'deki "profilsiz deneme derlemesi" yerine her derlemede yapılan daha
+  güçlü bir denetim: FFmpeg aynı commit'in temiz bir kopyasından, imajın orijinal `FF_CONFIGURE`'u ile **yalnız
+  yapılandırılır** (derlenmez) ve bu yapılandırma satırının b10'unkiyle harfi harfine aynı olması şarttır. Böylece
+  karşılaştırma her seferinde b10'un FFmpeg yapılandırmasına karşı yapılır.
+- Ayrıca profilsiz tam derleme de bir kez yapıldı (koşu 12, `profile=none`): denetleyici kendini denetledi; 11 bileşen
+  listesinin hepsinde "derleme = taban" çıktı ve taban satırı b10 ile aynıydı. Çözme testinde b10 ile 23 / 23 aynı.
+- `tools/inventory.py`: K-S2 bağlayıcı düzeyi (10 bileşenden alınan nesne sayısı).
+- `tools/decode_probe.c` + `tools/decode_test.py` + `tools/make_test_media.sh`: §4. mpv.com yerine küçük bir C programı
+  kullanıldı, çünkü b10'un mpv.com'u yayında yok; program DLL'i ASSMA gibi çalışırken yüklüyor, yani aynı program
+  iki DLL'le çalışabiliyorsa DLL'in değiştirilebildiği (LGPL) de gösterilmiş oluyor.
+- `tools/compare_builds.py`: K-S4 `COMPARE.md`.
+
+**Planda olmayan ama çıkan iki durum:**
+1. **b10'un araç zinciri imajı silinmiş.** FFmpeg-Builds eski imajları günler içinde siliyor. b11 koşusu imajı
+   bulamadığı için başlamadı. Çözüm, kalıcı: imaj kendi kayıt defterimize **aynı özetle** kopyalanıyor
+   (`mirror-toolchain.yml`; `ghcr.io/tamtam8888/assma-libmpv-toolchain`) ve derlemeler yalnız bu kopyadan yapılıyor.
+   b10'un imajı geri getirilemez. Bu yüzden b10 aynı ortamda yeniden derlenemez; kaynakları (b10-sources) tam.
+   Yeni imaj: FFmpeg-Builds `7f2a6b10` (18.11; `c9fe5114`'ten sonra kütüphane sürümleri güncellenmiş).
+   FFmpeg, mpv ve tarifin klonladıkları `pins.lock` ile aynı kaldı. İmaj değişikliğinin etkisi ayrıca ölçüldü: koşu 12
+   (yeni imaj, profilsiz) b10 ile aynı yapılandırma satırını ve aynı çözme sonuçlarını verdi.
+2. **İlk koşuda beklenti listelerim eksikti; denetim bunu yakaladı** (koşu 13, kırmızı):
+   - kaldırılan kütüphanelerin filtreleri gitti: `azmq`, `zmq` (ZeroMQ), `libvmaf`, `lv2`;
+   - iki yerel protokol listemde yoktu: `bluray` (yerel disk / klasör), `windows_handle` (açık dosya tanıtıcısı).
+
+   Hepsi gerekçesiyle listelere eklendi. ASSMA'nın filtreleri ayrı bir zorunlu listeyle denetleniyor; hepsi yerinde.
+   Çözme testinde de iki test hatası çıktı: bir filtre dizgisinin yazımı yanlıştı (b10'da da çalışmıyordu), ve
+   `estimated-frame-number` aynı b10 ile iki koşuda 75 ve 76 verdi (bir tahmin, sayaç değil) → ±1 tolerans. Ses
+   örneklerinin özeti, çözücü adları ve ses biçimi birebir aynı olmak zorunda.
+
+**Sonuç (koşu 15 ve 16; ayrıntı yayındaki `PROFILE-CHECKS.md`, `COMPARE.md`, `DECODE-TEST.md`):**
+- Çözücüler: 536 / 542. Gidenler yalnız beklenen 6 dış kütüphane çözücüsü: `libaom_av1`, `libopenh264`,
+  `libopencore_amrnb`, `libopencore_amrwb`, `libaribb24`, `libaribcaption`.
+- Filtreler: 530 / 534 (giden 4'ü yukarıda). Donanım çözücüleri 70 / 70.
+- Demuxer'lar: 363 / 369. Gidenler `rtp`, `rtsp`, `sap`, `sdp`, `libgme`, `libopenmpt`.
+- Kodlayıcılar: 229 → 0. Protokoller: 47 → 16, hepsi yerel.
+- 10 copyleft bileşenden DLL'e giren nesne: 0.
+- DLL'de kalan copyleft bileşenler:
+  - LGPL: FFmpeg (7 kütüphane), libiconv, FriBidi, libplacebo, libbluray, libudfread;
+  - MPL: subrandr, uchardet.
+- DLL: 129,5 MB → 86,3 MB. mpv istemci API'si 2.6, değişmedi.
+- Çözme testi: 24 durumun hepsi b10 ile aynı. Bunlar 21 dosya ve 3 ses grafiği; ASSMA'nın K238 grafiği (amerge 8+2 →
+  20 volume@ → amix) dahil, ses örneklerinin SHA-256'sı birebir.
+- Kalan: §5 saha testi (Windows), ASSMA'nın mpv testleri Windows CI'da yeni DLL ile, ve `source-package` (K-S5).
