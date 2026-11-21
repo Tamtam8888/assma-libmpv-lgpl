@@ -1,0 +1,68 @@
+# Keeps the toolchain image of a libmpv build available for good.
+#
+# Why: FFmpeg-Builds rebuilds its images every day and deletes the old ones. The image of b10
+# (win64-lgpl@sha256:c89ee1e6…) disappeared from ghcr.io/ffmpeg-builds within a week (found 21.11, build b11 could not
+# start). Without the image a build cannot be repeated, and the "scripts used to control compilation" (LGPL-2.1 §0)
+# lose the environment they ran in.
+#
+# What it does: copies the image, manifest by manifest, into this account's registry
+# (ghcr.io/<owner>/assma-libmpv-toolchain). The copy has the SAME digest as the original, so a build pinned to
+# "...@sha256:<digest>" means exactly the same bytes, whichever registry it is pulled from. The build workflow uses
+# the copy. The copy is never deleted (retention: forever; delete only by a recorded decision).
+#
+# After the first copy the package must be made public once, by hand (GitHub > Packages > assma-libmpv-toolchain >
+# Package settings > Change visibility), so that anyone who receives the DLL can use the same image.
+name: Mirror toolchain image
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "FFmpeg-Builds image to copy (tag or digest)"
+        required: true
+        default: "ghcr.io/ffmpeg-builds/ffmpeg-builds/win64-lgpl:latest"
+      ffbuilds_ref:
+        description: "FFmpeg-Builds revision that made the image (recorded with the copy)"
+        required: true
+      tag:
+        description: "tag for the copy (default: win64-lgpl-<UTC date>)"
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy (same digest)
+        env:
+          SOURCE: ${{ inputs.source }}
+          FFB: ${{ inputs.ffbuilds_ref }}
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          dest="ghcr.io/$owner/assma-libmpv-toolchain"
+          tag="${TAG:-win64-lgpl-$(date -u +%Y%m%d)}"
+          digest=$(docker buildx imagetools inspect "$SOURCE" --format '{{json .Manifest}}' | python3 -c "import json,sys; print(json.load(sys.stdin)['digest'])")
+          echo "source $SOURCE -> $digest"
+          repo="${SOURCE%%[:@]*}"            # registry/path without :tag or @digest
+          docker buildx imagetools create --tag "$dest:$tag" "$repo@$digest"
+          copy=$(docker buildx imagetools inspect "$dest:$tag" --format '{{json .Manifest}}' | python3 -c "import json,sys; print(json.load(sys.stdin)['digest'])")
+          echo "copy   $dest:$tag -> $copy"
+          [ "$copy" = "$digest" ] || { echo "digest changed while copying"; exit 1; }
+          # proof that the copy is complete: pull it and read its build environment
+          docker pull -q "$dest@$copy"
+          docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$dest@$copy" | grep -E '^(VARIANT|TARGET|FF_CONFIGURE)='
+          {
+            echo "### Toolchain image copied"
+            echo
+            echo "- source: \`$SOURCE\` (FFmpeg-Builds revision \`$FFB\`)"
+            echo "- copy: \`$dest:$tag\`"
+            echo "- pin for the build workflow: \`$dest@$copy\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "PIN=$dest@$copy"
