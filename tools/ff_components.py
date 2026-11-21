@@ -42,8 +42,9 @@ REQUIRED_DEMUXERS = ['mxf', 'mov', 'matroska', 'mpegts', 'imf', 'wav', 'w64', 'a
                      'aac', 'ac3', 'eac3', 'flac', 'ogg', 'image2', 'concat', 'hls', 'dash', 'srt', 'webvtt', 'ass']
 # Protocols that cannot reach a network by themselves. prompeg is an output-only FEC protocol that opens "udp://"
 # through FFmpeg's URL layer; without the udp protocol it cannot send anything (it is in b10 too).
-LOCAL_PROTOCOLS = {'async', 'cache', 'concat', 'concatf', 'crypto', 'data', 'fd', 'file', 'md5', 'pipe', 'prompeg',
-                   'shared', 'subfile', 'tee', 'android_content'}
+# bluray reads a local disc / folder through libbluray; windows_handle reads an already open Windows file handle.
+LOCAL_PROTOCOLS = {'async', 'bluray', 'cache', 'concat', 'concatf', 'crypto', 'data', 'fd', 'file', 'md5', 'pipe',
+                   'prompeg', 'shared', 'subfile', 'tee', 'android_content', 'windows_handle'}
 NETWORK_PROTOCOLS = {'tcp', 'udp', 'udplite', 'unix', 'tls', 'http', 'https', 'httpproxy', 'ftp', 'gopher', 'gophers',
                      'hls', 'icecast', 'mmsh', 'mmst', 'rtmp', 'rtmps', 'rtmpe', 'rtmpt', 'rtmpte', 'rtmpts', 'rtp',
                      'srtp', 'sctp', 'ipfs_gateway', 'ipns_gateway', 'librtmp', 'libsmbclient', 'libssh', 'libsrt',
@@ -129,7 +130,10 @@ def checks(build: dict, base: dict, report: dict, base_conf: str, ref_conf: str 
         added('DECODER'))
     missing = [f for f in REQUIRED_FILTERS if f not in build['FILTER']]
     add('K-S1', not missing, f"ASSMA filters present ({', '.join(REQUIRED_FILTERS)})", missing)
-    add('K-S1', not gone('FILTER'), f"filters: {len(build['FILTER'])}, none lost against b10", gone('FILTER'))
+    unexpected = gone('FILTER') - set(report.get('expected_gone_filters', []))
+    add('K-S1', not unexpected, f"filters: {len(build['FILTER'])} of {len(base['FILTER'])}; gone only those of "
+        f"removed libraries ({', '.join(sorted(gone('FILTER'))) or 'none'})" if not unexpected
+        else 'filters: unexpected filters are gone', unexpected)
     add('K-S1', not gone('HWACCEL') and not added('HWACCEL'),
         f"hwaccels identical to b10 ({len(build['HWACCEL'])})", gone('HWACCEL') | added('HWACCEL'))
     unexpected = gone('DEMUXER') - set(report['expected_gone_demuxers'])

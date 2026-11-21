@@ -5,7 +5,7 @@ mpv's recipe (ci/build-mingw64-full.sh) is NOT edited. It configures FFmpeg with
 FFmpeg-Builds toolchain image. This tool turns the image's value into the value of a profile, and the workflow
 exports the result before it runs the recipe:
 
-    FF_CONFIGURE="$(python3 tools/ff_profile.py s2 --from "$FF_CONFIGURE")"
+    FF_CONFIGURE="$(python3 tools/ff_profile.py s2 --from="$FF_CONFIGURE")"
 
 How a profile works (two safeguards, both needed):
 1. every `--enable-X` of a removed component is deleted from the image's value;
@@ -76,6 +76,13 @@ EXPECTED_GONE_DECODERS = {
     },
 }
 
+# K-S1: filters that may disappear: only the filters of removed libraries (ZeroMQ control, VMAF metric, LV2 plugin
+# host). ASSMA's filters are checked separately (ff_components.py REQUIRED_FILTERS).
+EXPECTED_GONE_FILTERS = {
+    'none': set(),
+    's2': {'azmq', 'zmq', 'libvmaf', 'lv2'},
+}
+
 # K-S1: demuxers that may disappear (network-only, or of a removed library).
 EXPECTED_GONE_DEMUXERS = {
     'none': set(),
@@ -125,6 +132,7 @@ def apply(profile: str, image_value: str) -> dict:
         'must_not_link': MUST_NOT_LINK[profile],
         'expected_gone_decoders': EXPECTED_GONE_DECODERS[profile],
         'expected_gone_demuxers': sorted(EXPECTED_GONE_DEMUXERS[profile]),
+        'expected_gone_filters': sorted(EXPECTED_GONE_FILTERS[profile]),
         'tool_sha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
     }
 

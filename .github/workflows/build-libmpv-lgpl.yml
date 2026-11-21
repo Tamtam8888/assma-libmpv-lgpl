@@ -116,7 +116,7 @@ jobs:
         run: |
           set -eu
           echo "image FF_CONFIGURE: $FF_CONFIGURE"
-          python3 "$GITHUB_WORKSPACE/assma/tools/ff_profile.py" "$FF_PROFILE" --from "$FF_CONFIGURE" \
+          python3 "$GITHUB_WORKSPACE/assma/tools/ff_profile.py" "$FF_PROFILE" --from="$FF_CONFIGURE" \
             --report /tmp/ff_profile.json > /tmp/ff_configure.txt
           FF_CONFIGURE="$(cat /tmp/ff_configure.txt)"
           export FF_CONFIGURE
