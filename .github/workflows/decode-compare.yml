@@ -1,0 +1,78 @@
+# Decode test between two EXISTING releases (the build workflow runs the same test against its reference).
+# Use: separate the effect of a profile from the effect of a new toolchain image - e.g. new s2 build vs the
+# profile-none build made from the same image.
+name: Decode compare (two releases)
+
+on:
+  workflow_dispatch:
+    inputs:
+      reference:
+        description: "reference release tag"
+        required: true
+      new:
+        description: "release tag to test"
+        required: true
+      image:
+        description: "toolchain image (Wine + mingw-w64)"
+        required: true
+        default: "ghcr.io/tamtam8888/assma-libmpv-toolchain@sha256:d19d8ab047f712ea434ea9d199635c971617ab6edae3016e07756d888e68eb31"
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  media:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          path: assma
+      - run: |
+          set -eu
+          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg > /dev/null
+          bash assma/tools/make_test_media.sh media
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: test-media
+          path: media/
+          retention-days: 7
+
+  decode:
+    needs: media
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ inputs.image }}
+      env:
+        WINEPREFIX: /tmp/wine
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          path: assma
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: test-media
+          path: media
+      - name: Decode with both DLLs
+        env:
+          REF: ${{ inputs.reference }}
+          NEW: ${{ inputs.new }}
+        run: |
+          set -eu
+          for t in "$REF" "$NEW"; do
+            mkdir -p "rel/$t"
+            curl -fsSL -o "rel/$t.zip" "https://github.com/$GITHUB_REPOSITORY/releases/download/$t/$t.zip"
+            python3 -c "import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); [z.extract(n, sys.argv[2]) for n in z.namelist() if n=='libmpv-2.dll' or n.startswith('include/')]" "rel/$t.zip" "rel/$t"
+          done
+          "${FFBUILD_CROSS_PREFIX}gcc" -O2 -Wall -I"rel/$NEW/include" -o decode_probe.exe assma/tools/decode_probe.c
+          python3 assma/tools/decode_test.py --probe decode_probe.exe --media media --ref "rel/$REF/libmpv-2.dll" \
+            --new "rel/$NEW/libmpv-2.dll" --ref-name "$REF" --new-name "$NEW" --out out
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        if: always()
+        with:
+          name: decode-compare
+          path: out/
+          retention-days: 90
