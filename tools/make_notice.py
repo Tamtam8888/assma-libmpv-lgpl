@@ -12,6 +12,15 @@ import sys
 ORDER = {'lgpl': 0, 'mpl': 1, 'permissive': 2, 'runtime': 3}
 
 
+def profile_note(m: dict) -> list:
+    p = m.get('ffmpeg_profile')
+    if not p or p.get('profile') == 'none':
+        return []
+    return [f"FFmpeg profile `{p['profile']}`: FFmpeg was configured without encoders and without network access, "
+            "and without the external libraries listed in `PROFILE-CHECKS.md` of the build (decoders, filters and "
+            "hardware decoding are unchanged). Components that are not inside the DLL are not listed below.", '']
+
+
 def main() -> None:
     m = json.load(open(sys.argv[1], encoding='utf-8'))
     sm = json.load(open(sys.argv[2], encoding='utf-8'))
@@ -32,6 +41,7 @@ def main() -> None:
                 r['version'] = ver
     out = [f"# libmpv-2.dll - third-party components and their licences", '',
            f"Build: `{m['name']}` · libmpv-2.dll SHA-256 `{sm['dll_sha256']}`", '',
+           *profile_note(m),
            "This is an LGPL build of libmpv (mpv built with `-Dgpl=false`; https://mpv.io). `libmpv-2.dll` contains "
            "objects statically linked from the components below. **Each component is under its own licence**; the "
            "licence texts are in the `licences/` folder of the source release, under the component's own file names.",

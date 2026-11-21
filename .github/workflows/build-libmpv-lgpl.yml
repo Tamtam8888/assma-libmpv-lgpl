@@ -6,6 +6,11 @@
 # - Everything is fixed to an exact version:
 #     mpv commit (input), toolchain image by digest (input), FFmpeg-Builds revision (input),
 #     every library the recipe clones (pins.lock, applied by tools/git-pin-shim), every GitHub Action by commit SHA.
+# - FFmpeg profile (input "profile", docs/S2_DEGISIKLIK_PLANI.md): the recipe is still not edited; only its input
+#     FF_CONFIGURE (a variable of the toolchain image) is turned into the profile's value by tools/ff_profile.py.
+#     tools/ff_components.py then proves, against the reference release, what stayed and what went (K-S1, K-S2),
+#     tools/decode_test.py decodes the same files with the reference DLL and the new DLL under Wine, and
+#     tools/compare_builds.py writes COMPARE.md (K-S4). Any red check stops the release.
 # - Licence is proven from what is really inside the DLL, not only from build switches:
 #     tools/inventory.py reads the link line of libmpv-2.dll and checks every library against licences.tsv;
 #     a GPL, nonfree or unknown library stops the release.
@@ -35,6 +40,15 @@ on:
         description: "Stop on a GPL / nonfree / unknown linked library"
         type: boolean
         default: true
+      profile:
+        description: "FFmpeg profile (tools/ff_profile.py): none = the image's FF_CONFIGURE unchanged (as b10), s2 = no encoders / network / unused libraries"
+        type: choice
+        options: [s2, none]
+        default: s2
+      reference:
+        description: "Reference release for the checks and the comparison"
+        required: true
+        default: "libmpv-lgpl-v0.42.0-dev-gfe753a782-fe753a782-x64-b10"
 
 permissions:
   contents: write
@@ -80,8 +94,33 @@ jobs:
           echo "$GITHUB_WORKSPACE/pin-shim" >> "$GITHUB_PATH"
           : > "$GITHUB_WORKSPACE/clones.tsv"
 
-      - name: Build (mpv's own script, unchanged)
-        run: ./ci/build-mingw64-full.sh
+      - name: Get the reference release (only read)
+        env:
+          REF: ${{ inputs.reference }}
+        run: |
+          set -eu
+          mkdir -p "$GITHUB_WORKSPACE/ref"
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/$REF"
+          curl -fsSL -o "$GITHUB_WORKSPACE/ref/ref.zip" "$base/$REF.zip"
+          curl -fsSL -o "$GITHUB_WORKSPACE/ref/SHA256SUMS.txt" "$base/SHA256SUMS.txt"
+          want=$(grep " $REF.zip\$" "$GITHUB_WORKSPACE/ref/SHA256SUMS.txt" | cut -d' ' -f1)
+          got=$(sha256sum "$GITHUB_WORKSPACE/ref/ref.zip" | cut -d' ' -f1)
+          echo "reference zip sha256 $got (its SHA256SUMS: $want)"; [ "$got" = "$want" ]
+          python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extract('MANIFEST.json', sys.argv[2])" \
+            "$GITHUB_WORKSPACE/ref/ref.zip" "$GITHUB_WORKSPACE/ref"
+
+      - name: Build (mpv's own script, unchanged; FFmpeg profile applied to its input FF_CONFIGURE)
+        env:
+          FF_PROFILE: ${{ inputs.profile }}
+        run: |
+          set -eu
+          echo "image FF_CONFIGURE: $FF_CONFIGURE"
+          python3 "$GITHUB_WORKSPACE/assma/tools/ff_profile.py" "$FF_PROFILE" --from "$FF_CONFIGURE" \
+            --report /tmp/ff_profile.json > /tmp/ff_configure.txt
+          FF_CONFIGURE="$(cat /tmp/ff_configure.txt)"
+          export FF_CONFIGURE
+          echo "build FF_CONFIGURE (profile $FF_PROFILE): $FF_CONFIGURE"
+          ./ci/build-mingw64-full.sh
 
       - name: Print meson log on failure
         if: failure()
@@ -108,6 +147,17 @@ jobs:
           grep -q '^#define CONFIG_GPL 0' ffmpeg/config.h || { echo "FFmpeg is GPL"; exit 1; }
           grep -q '^#define CONFIG_NONFREE 0' ffmpeg/config.h || { echo "FFmpeg is nonfree"; exit 1; }
 
+      - name: FFmpeg profile checks K-S1 / K-S2 (baseline = reference release's configure line)
+        run: |
+          set -eu
+          # the same compiler environment the recipe gave FFmpeg's configure (ci/build-mingw64-full.sh, top lines)
+          . ./ci/build-common.sh
+          CFLAGS="${CFLAGS/-I${FFBUILD_PREFIX}\/include/-isystem${FFBUILD_PREFIX}/include}"
+          CXXFLAGS="${CXXFLAGS/-I${FFBUILD_PREFIX}\/include/-isystem${FFBUILD_PREFIX}/include}"
+          export CFLAGS CXXFLAGS
+          python3 "$GITHUB_WORKSPACE/assma/tools/ff_components.py" --ffmpeg ffmpeg --report /tmp/ff_profile.json \
+            --reference-manifest "$GITHUB_WORKSPACE/ref/MANIFEST.json" --out artifact-libmpv
+
       - name: Functional test (mpv's own check, under Wine)
         run: cd artifact && wine ./mpv.com -v --no-config
 
@@ -117,12 +167,15 @@ jobs:
           IMAGE: ${{ inputs.image }}
           FFBUILDS_REVISION: ${{ inputs.ffbuilds_ref }}
           STRICT: ${{ inputs.strict }}
+          FF_PROFILE: ${{ inputs.profile }}
+          FF_PROFILE_REPORT: /tmp/ff_profile.json
         run: |
           set -eu
           MPV_COMMIT=$(git rev-parse HEAD)
           FFMPEG_COMMIT=$(git -C ffmpeg rev-parse HEAD)
           VERSION=$(grep VERSION $(find . -path "*/common/version.h" -type f | head -n 1) | cut -d'"' -f2)
-          NAME="libmpv-lgpl-${VERSION}-${MPV_COMMIT:0:9}-x64-b${GITHUB_RUN_NUMBER}"
+          SUFFIX=""; [ "$FF_PROFILE" = none ] || SUFFIX="-$FF_PROFILE"
+          NAME="libmpv-lgpl-${VERSION}-${MPV_COMMIT:0:9}-x64${SUFFIX}-b${GITHUB_RUN_NUMBER}"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           {
             echo "LGPL libmpv for ASSMA - build information"
@@ -133,6 +186,7 @@ jobs:
             echo "Library versions : pins.lock of $GITHUB_REPOSITORY at $GITHUB_SHA (see MANIFEST.json)"
             echo "Toolchain image  : $IMAGE (variant $VARIANT)"
             echo "FFmpeg-Builds    : https://github.com/FFmpeg-Builds/FFmpeg-Builds/tree/$FFBUILDS_REVISION"
+            echo "FFmpeg profile   : $FF_PROFILE (tools/ff_profile.py; image FF_CONFIGURE changed only as listed in PROFILE-CHECKS.md)"
             echo "Built by         : $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo "Built on         : $(date -u '+%Y-%m-%d %H:%M UTC')"
             echo "mpv gpl option   : $(cat /tmp/gpl.txt)"
@@ -206,10 +260,74 @@ jobs:
           path: image-sources/
           retention-days: 90
 
-  release:
-    needs: [build, image-sources]
+  decode-media:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          path: assma
+      - name: Make the test files (runner's own ffmpeg; nothing downloaded, nothing released)
+        run: |
+          set -eu
+          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg > /dev/null
+          ffmpeg -hide_banner -version | head -n 1
+          bash assma/tools/make_test_media.sh media
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: test-media
+          path: media/
+          retention-days: 7
+
+  decode-test:
+    needs: [build, decode-media]
+    runs-on: ubuntu-latest
+    # the same pinned image: it has Wine and the mingw-w64 compiler the build used
+    container:
+      image: ${{ inputs.image }}
+      env:
+        WINEPREFIX: /tmp/wine
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          path: assma
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: ${{ needs.build.outputs.name }}
+          path: new
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: test-media
+          path: media
+      - name: Decode the same files with the reference DLL and the new DLL (Wine)
+        env:
+          REF: ${{ inputs.reference }}
+          NAME: ${{ needs.build.outputs.name }}
+        run: |
+          set -eu
+          mkdir ref
+          curl -fsSL -o ref.zip "https://github.com/$GITHUB_REPOSITORY/releases/download/$REF/$REF.zip"
+          python3 -c "import zipfile; z=zipfile.ZipFile('ref.zip'); z.extract('libmpv-2.dll','ref')"
+          "${FFBUILD_CROSS_PREFIX}gcc" -O2 -Wall -Inew/include -o decode_probe.exe assma/tools/decode_probe.c
+          mkdir -p out
+          python3 assma/tools/decode_test.py --probe decode_probe.exe --media media --ref ref/libmpv-2.dll \
+            --new new/libmpv-2.dll --ref-name "$REF" --new-name "$NAME" --out out
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        if: always()
+        with:
+          name: decode-test
+          path: out/
+          retention-days: 90
+
+  release:
+    needs: [build, image-sources, decode-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
+        with:
+          path: assma-tools
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           path: dl
@@ -217,12 +335,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NAME: ${{ needs.build.outputs.name }}
+          REF: ${{ inputs.reference }}
         run: |
           set -eu
           cd dl
           mkdir -p "$NAME/licences/image"
           cp -r image-sources/licences/. "$NAME/licences/image/"
           cp image-sources/image-sources.tsv "$NAME/IMAGE-SOURCES.tsv"
+          cp decode-test/DECODE-TEST.md decode-test/DECODE-TEST.json "$NAME/"
           python3 - "$NAME" <<'PY'
           import csv, json, sys
           from pathlib import Path
@@ -237,6 +357,12 @@ jobs:
               for r in rows:
                   f.write(f"| {r['stage']} | {r['repository']} | `{r['commit']}` | {r['class']} | {r['source archived']} |\n")
           PY
+          # K-S4: comparison with the reference release (a red result stops before anything is published)
+          mkdir ref && curl -fsSL -o ref.zip "https://github.com/$GITHUB_REPOSITORY/releases/download/$REF/$REF.zip"
+          (cd ref && unzip -q ../ref.zip MANIFEST.json 'include/*')
+          python3 ../assma-tools/tools/compare_builds.py --ref ref --new "$NAME" --decode "$NAME/DECODE-TEST.md" \
+            > "$NAME/COMPARE.md"
+          cat "$NAME/COMPARE.md"
           tar -C image-sources -cf image-library-sources.tar sources image-sources.tsv
           (cd "$NAME" && zip -qr "../$NAME.zip" .)
           sha256sum "$NAME.zip" sources/mpv-and-ffmpeg-sources.tar.xz image-library-sources.tar > SHA256SUMS.txt
@@ -244,4 +370,4 @@ jobs:
           cat SHA256SUMS.txt
           gh release create "$NAME" "$NAME.zip" sources/mpv-and-ffmpeg-sources.tar.xz image-library-sources.tar \
             SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --title "$NAME" \
-            --notes "LGPL libmpv for ASSMA, built from mpv's official ci/build-mingw64-full.sh (variant lgpl), every source pinned. Inside the zip: MANIFEST.json (hashes, commits, configuration, linked libraries with licences), INVENTORY.md, BUILDINFO.txt, SOURCES.txt and the licence texts. Sources: the two attached archives."
+            --notes "LGPL libmpv for ASSMA, built from mpv's official ci/build-mingw64-full.sh (variant lgpl), every source pinned; FFmpeg profile ${{ inputs.profile }} (PROFILE-CHECKS.md, COMPARE.md, DECODE-TEST.md against ${{ inputs.reference }}). Inside the zip: MANIFEST.json (hashes, commits, configuration, linked libraries with licences), INVENTORY.md, BUILDINFO.txt, SOURCES.txt and the licence texts. Sources: the two attached archives."

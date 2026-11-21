@@ -358,6 +358,24 @@ def main() -> int:
             problems.append(f"linked library {lib['stem']} ({lib['file'] or 'not found'}): "
                             f"{lib['licence']} [{lib['class']}]")
 
+    # FFmpeg profile (tools/ff_profile.py, S2 plan): what was changed, and K-S2 at link level - the linker must have
+    # taken no object at all from a component the profile removes.
+    profile = None
+    report_file = os.environ.get('FF_PROFILE_REPORT', '')
+    if report_file and os.path.isfile(report_file):
+        profile = json.loads(Path(report_file).read_text())
+        link_check = []
+        for stem in profile.get('must_not_link', []):
+            hit = next((x for x in libs if x['stem'] == stem), None)
+            taken = hit['members_in_dll'] if hit else 0
+            link_check.append({'stem': stem, 'on_link_line': bool(hit), 'members_in_dll': taken})
+            if taken:
+                problems.append(f'K-S2: profile {profile["profile"]} removes {stem}, but the linker took '
+                                f'{taken} objects from it')
+        profile['link_check'] = link_check
+    elif os.environ.get('FF_PROFILE', 'none') != 'none':
+        problems.append('FF_PROFILE is set but the profile report is missing')
+
     if len(libs) < 10 or not any(x['stem'] == 'avcodec' and x['in_dll'] for x in libs):
         problems.append(f'link line not understood: only {len(libs)} libraries found (expected FFmpeg and more)')
 
@@ -394,6 +412,7 @@ def main() -> int:
         'cppwinrt': [p.name for p in cppwinrt],
         'ffmpeg': {'commit': run('git', '-C', 'ffmpeg', 'rev-parse', 'HEAD'), 'licence_switches': switches,
                    'configuration': configuration.group(1) if configuration else '', 'external_libraries': ff_ext},
+        'ffmpeg_profile': profile,
         'mpv_build_options': mpv_options,
         'mpv_dependencies': [{'name': n, 'version': v} for n, v in mpv_deps],
         'linked_libraries': libs,
@@ -412,6 +431,17 @@ def main() -> int:
     return 0
 
 
+def profile_line(p) -> str:
+    if not p:
+        return 'none (the image\'s FF_CONFIGURE unchanged)'
+    if p['profile'] == 'none':
+        return 'none (checked; the image\'s FF_CONFIGURE unchanged)'
+    gone = [c['stem'] for c in p.get('link_check', []) if not c['members_in_dll']]
+    return (f"**{p['profile']}** (tools/ff_profile.py `{p['tool_sha256'][:12]}`; appended "
+            f"{len(p['added_options'])} --disable options; removed components with 0 objects in the DLL: "
+            f"{', '.join(gone) or '-'}; checks: PROFILE-CHECKS.md)")
+
+
 def markdown(m: dict) -> str:
     L = [f"# {m['name'] or 'libmpv'} - dependency and licence inventory", '',
          f"Gate: **{m['gate']['result']}** (strict: {m['gate']['strict']})", '']
@@ -425,6 +455,7 @@ def markdown(m: dict) -> str:
           f"- Toolchain image `{m['toolchain_image']['reference']}` (variant {m['toolchain_image']['variant']}, "
           f"FFmpeg-Builds revision {m['toolchain_image']['ffmpeg_builds_revision'] or 'not given'})",
           f"- FFmpeg commit `{m['ffmpeg']['commit']}`, switches {m['ffmpeg']['licence_switches']}",
+          f"- FFmpeg profile: {profile_line(m.get('ffmpeg_profile'))}",
           f"- Workflow {m['workflow']['repository']} commit `{m['workflow']['commit']}`, run {m['workflow']['run']}",
           '', '## Cloned sources', '', '| repository | commit | fixed by pins.lock |', '|---|---|---|']
     L += [f"| {c['url']} | `{c['commit']}` | {'yes' if c['pinned_by_pins_lock'] else 'no'} |"
