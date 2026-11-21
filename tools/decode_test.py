@@ -49,6 +49,22 @@ GRAPHS = [
 ]
 
 
+# 'estimated-frame-number' is mpv's estimate from the playback position when the end is reached, not a decoder
+# count: the same DLL gave 75 in one run and 76 in another for mpeg4_mp3.avi (b10 in runs 12 and 15, 21.11). A
+# difference of one frame is therefore not a decoder difference; everything else must be identical.
+TOLERANCE = {'estimated-frame-number': 1}
+
+
+def same_value(key: str, a, b) -> bool:
+    if a == b:
+        return True
+    tol = TOLERANCE.get(key)
+    try:
+        return tol is not None and abs(int(a) - int(b)) <= tol
+    except (TypeError, ValueError):
+        return False
+
+
 def run_probe(folder: Path, args: list) -> dict:
     cmd = ['wine', str(folder / 'decode_probe.exe')] + args
     try:
@@ -113,7 +129,7 @@ def main() -> int:
             res[side] = facts
         ref, new = res['ref'], res['new']
         keys = sorted(set(ref) | set(new))
-        diff = {k: (ref.get(k), new.get(k)) for k in keys if ref.get(k) != new.get(k)}
+        diff = {k: (ref.get(k), new.get(k)) for k in keys if not same_value(k, ref.get(k), new.get(k))}
         ref_ok = ref.get('end') == 'eof' and 'error' not in ref
         new_ok = new.get('end') == 'eof' and 'error' not in new
         if not ref_ok:
@@ -142,6 +158,8 @@ def main() -> int:
         for k, (x, y) in r['difference'].items():
             L.append(f"|  | `{k}` | {a.ref_name}: {x} | | {a.new_name}: {y} | | |")
     L += ['', f'Test files not made by the runner\'s ffmpeg: {skipped or "none"}', '',
+          'Tolerated: `estimated-frame-number` ±1 (a playback-position estimate; the same DLL gave 75 and 76 in two runs). '
+          'Decoder names, audio format and decoded samples must be identical.', '',
           'Wine is not Windows: hardware decoding, GPU output and timing are covered by the field test.', '']
     (out / 'DECODE-TEST.md').write_text('\n'.join(L), encoding='utf-8')
     (out / 'DECODE-TEST.json').write_text(json.dumps(rows, indent=2) + '\n', encoding='utf-8')
