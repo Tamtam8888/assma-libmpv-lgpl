@@ -175,4 +175,7 @@ Toplu test listesinin 59. maddesi bu derleme için şöyle genişler. Her adım 
 - DLL: 129,5 MB → 86,3 MB. mpv istemci API'si 2.6, değişmedi.
 - Çözme testi: 24 durumun hepsi b10 ile aynı. Bunlar 21 dosya ve 3 ses grafiği; ASSMA'nın K238 grafiği (amerge 8+2 →
   20 volume@ → amix) dahil, ses örneklerinin SHA-256'sı birebir.
-- Kalan: §5 saha testi (Windows), ASSMA'nın mpv testleri Windows CI'da yeni DLL ile, ve `source-package` (K-S5).
+- K-S5: `…-s2-b16-sources` yayınlandı (REPORT: 102 kontrol geçti, 0 hata, 9 not).
+- ASSMA'nın Windows CI'ı (gerçek Windows, s2-b16 DLL): 105 / 105 test geçti. mpv testlerinin hepsi koştu: seek, kare adımı,
+  basılı tutma, cue'ya atlama ve altyazı görünürlüğü SE ile birebir, önizleme, osd.
+- Kalan: §5 saha testi (kullanıcı; ASSMA 0.0.4, b10'lu 0.0.3 ile yan yana).
