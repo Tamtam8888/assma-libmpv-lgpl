@@ -13,10 +13,11 @@ on:
       image:
         description: "the build's toolchain image (must equal its MANIFEST)"
         required: true
-        default: "ghcr.io/ffmpeg-builds/ffmpeg-builds/win64-lgpl@sha256:c89ee1e6f09006d25229c76a4b0b261c86a9e5d5dd986bcd646aa2d8b9521061"
+        default: "ghcr.io/tamtam8888/assma-libmpv-toolchain@sha256:d19d8ab047f712ea434ea9d199635c971617ab6edae3016e07756d888e68eb31"
 
 permissions:
   contents: write
+  packages: read      # the toolchain image copy in this account's registry (mirror-toolchain.yml)
 
 jobs:
   package:
